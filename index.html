@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E2038">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Timbra">
+<link rel="apple-touch-icon" href="icona-192.png">
+<link rel="icon" href="icona-192.png">
+<link rel="manifest" href="manifest.json" id="manifestLink">
+<title>Timbratura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   CONFIGURAZIONE: l'unica riga da toccare è API_URL, nel blocco
+   di codice in fondo alla pagina.
+   ============================================================ */
+:root{
+  --ink:#0E2038; --ink-soft:#1B3355; --porcelain:#EEF2F5; --paper:#FFFFFF;
+  --signal:#FFC400; --go:#0F7A57; --go-deep:#0A5E42; --stop:#B4232A; --steel:#6B7C8F;
+  --line:#D6DEE6; --radius:14px;
+  --tape:repeating-linear-gradient(135deg,var(--signal) 0 14px,var(--ink) 14px 28px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--porcelain); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  font-size:16px; line-height:1.45;
+  min-height:100dvh; display:flex; flex-direction:column;
+  padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.wrap{width:100%;max-width:520px;margin:0 auto;padding:0 18px;flex:1;display:flex;flex-direction:column}
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+
+header{padding:22px 0 16px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.chi{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:30px;line-height:1;letter-spacing:.01em}
+.chi small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:500;font-size:11px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--steel);margin-bottom:5px}
+.orologio{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:26px;color:var(--steel);font-variant-numeric:tabular-nums}
+
+.card{background:var(--paper);border-radius:var(--radius);overflow:hidden;
+  box-shadow:0 1px 0 var(--line),0 8px 24px rgba(14,32,56,.07)}
+.tape{height:10px;background:var(--tape);border-radius:var(--radius) var(--radius) 0 0}
+.card.on{background:var(--go);color:#fff}
+.card.on .tape{background:repeating-linear-gradient(135deg,var(--signal) 0 14px,var(--go-deep) 14px 28px)}
+.card-body{padding:22px 20px 24px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--steel)}
+.card.on .eyebrow{color:rgba(255,255,255,.72)}
+.lavoro{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:34px;line-height:1.05;margin:6px 0 0;overflow-wrap:anywhere}
+.cronometro{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:68px;line-height:.95;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;margin:14px 0 2px}
+.dalle{font-size:14px;color:rgba(255,255,255,.8)}
+
+label.campo{display:block;font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--steel);margin:0 0 7px}
+select,input[type=text],input[type=tel]{
+  width:100%;padding:14px 13px;font:inherit;font-size:17px;color:var(--ink);
+  background:var(--paper);border:1.5px solid var(--line);border-radius:10px;appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7C8F' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;padding-right:38px}
+select:focus,input:focus,button:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+.blocco{margin-top:18px}
+
+.azioni{margin-top:auto;padding:22px 0 24px}
+button{font:inherit;cursor:pointer;border:none;border-radius:12px}
+.big{width:100%;padding:22px 18px;font-family:"Barlow Condensed",sans-serif;font-weight:700;
+  font-size:29px;letter-spacing:.02em;text-transform:uppercase;color:#fff;background:var(--ink);
+  display:flex;align-items:center;justify-content:center;gap:12px;min-height:76px}
+.big.esci{background:var(--stop)}
+.big[disabled]{background:var(--steel);cursor:default}
+.big:active:not([disabled]){transform:translateY(1px)}
+.ghost{width:100%;padding:14px;background:transparent;color:var(--ink-soft);border:1.5px solid var(--line);
+  font-weight:500;font-size:15px;margin-top:10px;border-radius:12px}
+.link{background:none;border:none;color:var(--ink-soft);text-decoration:underline;padding:6px 0;font-size:14px}
+
+.gps{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:13.5px;color:var(--steel)}
+.pallino{width:9px;height:9px;border-radius:50%;background:var(--steel);flex:none}
+.gps.ok .pallino{background:var(--go)}
+.gps.ko .pallino{background:var(--stop)}
+.gps.wait .pallino{background:var(--signal);animation:pulsa 1.1s ease-in-out infinite}
+@keyframes pulsa{50%{opacity:.25}}
+
+.esito{border-radius:var(--radius);padding:20px;background:var(--paper);border-left:6px solid var(--go);
+  box-shadow:0 8px 24px rgba(14,32,56,.07)}
+.esito.warn{border-left-color:var(--signal)}
+.esito.err{border-left-color:var(--stop)}
+.esito h2{font-family:"Barlow Condensed",sans-serif;font-size:30px;margin:4px 0 8px;line-height:1.05}
+.esito p{margin:0 0 6px;font-size:15px}
+.esito .grande{font-family:"Barlow Condensed",sans-serif;font-size:52px;line-height:1;font-variant-numeric:tabular-nums}
+
+.storico{margin-top:22px}
+.storico h3{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--steel);margin:0 0 8px}
+.riga{display:flex;gap:10px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.riga b{font-family:"Barlow Condensed",sans-serif;font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;min-width:44px}
+.riga .t{font-weight:600;font-size:11px;letter-spacing:.1em;text-transform:uppercase;min-width:58px}
+.riga .t.e{color:var(--go)} .riga .t.u{color:var(--stop)}
+.riga span:last-child{color:var(--steel);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+#scanner{position:fixed;inset:0;background:var(--ink);z-index:50;display:none;flex-direction:column}
+#scanner.aperto{display:flex}
+#lettore{flex:1;overflow:hidden}
+#lettore video{width:100%!important;height:100%!important;object-fit:cover}
+.scan-bar{padding:16px 18px calc(18px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;text-align:center}
+.scan-bar p{margin:0 0 12px;font-size:14px;color:#B9C6D4}
+
+/* scelta del lavoro quando l'elenco è lungo */
+.cerca{position:relative;margin-top:14px}
+.cerca input{padding-left:40px}
+.cerca::before{content:"";position:absolute;left:15px;top:50%;width:13px;height:13px;margin-top:-8px;
+  border:2px solid var(--steel);border-radius:50%;pointer-events:none}
+.cerca::after{content:"";position:absolute;left:25px;top:50%;width:7px;height:2px;margin-top:3px;
+  background:var(--steel);transform:rotate(45deg);pointer-events:none}
+.elenco{margin-top:12px;max-height:290px;overflow-y:auto;border:1.5px solid var(--line);border-radius:10px;background:var(--paper)}
+.gruppo{font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--steel);
+  padding:11px 14px 5px;position:sticky;top:0;background:var(--paper)}
+.voce{display:block;width:100%;text-align:left;padding:13px 14px;background:none;border:none;
+  border-top:1px solid var(--line);font-size:16px;color:var(--ink);border-radius:0;line-height:1.3}
+.gruppo + .voce{border-top:none}
+.voce.sel{background:var(--ink);color:#fff;font-weight:500}
+.vuoto{padding:16px 14px;color:var(--steel);font-size:14px}
+.scelto{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;
+  padding:14px;border:1.5px solid var(--ink);border-radius:10px;background:var(--paper)}
+.scelto span{font-weight:500;overflow-wrap:anywhere}
+
+.muto{color:var(--steel);font-size:14px}
+.nota{background:#FFF8DC;border:1px solid #F0D98A;border-radius:10px;padding:13px 14px;font-size:14px;margin-top:14px}
+.coda{background:var(--ink);color:#fff;border-radius:10px;padding:12px 14px;font-size:14px;margin-top:14px;
+  display:flex;align-items:center;gap:11px}
+.coda b{font-weight:600}
+.coda .pallino{background:var(--signal);animation:pulsa 1.1s ease-in-out infinite}
+.installa{background:var(--paper);border:1.5px solid var(--line);border-radius:12px;padding:14px;margin-top:16px;font-size:14px}
+.installa b{display:block;font-weight:600;margin-bottom:4px}
+.hide{display:none!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="chi"><small id="etichettaChi">Timbratura</small><span id="nome">…</span></div>
+    <div class="orologio" id="orologio">--:--</div>
+  </header>
+  <main id="app"><p class="muto">Carico…</p></main>
+</div>
+
+<div id="scanner">
+  <div id="lettore"></div>
+  <div class="scan-bar">
+    <p>Inquadra il QR affisso all'ingresso</p>
+    <button class="ghost" style="color:#fff;border-color:#3B5474" onclick="chiudiScanner()">Annulla</button>
+  </div>
+</div>
+
+<script>
+/* ==========================================================
+   1. INCOLLA QUI L'URL DELLA WEB APP APPS SCRIPT (finisce con /exec)
+   ========================================================== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbyNRmuNHNW6AIG3ERD3jFLBwv1tzTjLYM2iLK_Eh-L0DrsugdS5QzWcFWOVhJg1mDjIDA/exec';
+/* ========================================================== */
+
+const app = document.getElementById('app');
+const $ = function (id) { return document.getElementById(id); };
+let stato = null, posizione = null, gpsStato = 'wait', offsetOrologio = 0;
+let lavoroDaQr = null, scelta = { codice: '', nomeExtra: '' };
+let promptInstall = null, sincronizzando = false;
+
+/* ---------- memoria locale ---------- */
+function leggi(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function scrivi(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+/* ---------- coda offline ---------- */
+function coda() {
+  try { return JSON.parse(leggi('tb.coda') || '[]'); } catch (e) { return []; }
+}
+function salvaCoda(c) { scrivi('tb.coda', JSON.stringify(c.slice(-40))); }
+function accoda(params) {
+  const c = coda();
+  c.push(params);
+  salvaCoda(c);
+}
+
+/* ---------- chiamate al foglio ---------- */
+function api(action, params, timeoutMs) {
+  return new Promise(function (risolvi, rifiuta) {
+    const cb = 'cb' + Math.random().toString(36).slice(2, 10);
+    const q = new URLSearchParams(Object.assign({ action: action, callback: cb, _: Date.now() }, params || {}));
+    const s = document.createElement('script');
+    let chiuso = false;
+    function pulisci() { chiuso = true; clearTimeout(t); delete window[cb]; if (s.parentNode) s.remove(); }
+    const t = setTimeout(function () {
+      if (!chiuso) { pulisci(); const e = new Error('Il server non risponde.'); e.rete = true; rifiuta(e); }
+    }, timeoutMs || 25000);
+    window[cb] = function (d) { if (!chiuso) { pulisci(); risolvi(d); } };
+    s.onerror = function () {
+      if (!chiuso) { pulisci(); const e = new Error('Connessione non riuscita.'); e.rete = true; rifiuta(e); }
+    };
+    s.src = API_URL + '?' + q.toString();
+    document.body.appendChild(s);
+  });
+}
+
+/* ---------- posizione ---------- */
+function chiediPosizione() {
+  return new Promise(function (risolvi) {
+    if (!navigator.geolocation) { gpsStato = 'ko'; disegnaGps(); return risolvi(null); }
+    navigator.geolocation.getCurrentPosition(
+      function (p) {
+        posizione = { lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) };
+        gpsStato = 'ok'; disegnaGps(); risolvi(posizione);
+      },
+      function () { gpsStato = 'ko'; disegnaGps(); risolvi(null); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+}
+function disegnaGps() {
+  const el = $('gps'); if (!el) return;
+  el.className = 'gps ' + gpsStato;
+  const testo = {
+    wait: 'Cerco la posizione…',
+    ok: posizione ? 'Posizione rilevata (±' + posizione.acc + ' m)' : '',
+    ko: 'Posizione non disponibile — attivala nelle impostazioni'
+  };
+  const t = $('gpsTesto'); if (t) t.textContent = testo[gpsStato] || '';
+}
+
+/* ---------- orologio ---------- */
+function adesso() { return new Date(Date.now() + offsetOrologio); }
+setInterval(function () {
+  const d = adesso();
+  $('orologio').textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  aggiornaCrono();
+}, 1000);
+
+function aggiornaCrono() {
+  const el = $('crono');
+  if (!el || !stato || !stato.aperta || !stato.aperta.inizioIso) return;
+  let ms = adesso().getTime() - new Date(stato.aperta.inizioIso).getTime();
+  if (ms < 0) ms = 0;
+  const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, s = Math.floor(ms / 1000) % 60;
+  el.textContent = h + ':' + ('0' + m).slice(-2) + ':' + ('0' + s).slice(-2);
+}
+
+/* ---------- avvio ---------- */
+(function avvia() {
+  const u = new URL(location.href);
+  const d = u.searchParams.get('d');
+  const l = u.searchParams.get('l');
+  if (d) scrivi('tb.token', d.trim());
+  if (l) { lavoroDaQr = l.trim().toUpperCase(); scelta.codice = lavoroDaQr; }
+
+  // Il link personale resta nell'indirizzo: serve a iPhone quando l'app
+  // viene aggiunta alla schermata Home, perché lì la memoria è separata.
+  if (d) manifestConToken(d.trim());
+
+  if (API_URL.indexOf('INCOLLA') === 0) {
+    app.innerHTML = '<div class="esito err"><h2>App non configurata</h2>' +
+      '<p>Manca l\'indirizzo del foglio Google. Apri <code>index.html</code> e incolla l\'URL della web app Apps Script nella riga <code>API_URL</code>.</p></div>';
+    return;
+  }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+  if (!leggi('tb.token')) { schermataSenzaLink(); return; }
+
+  chiediPosizione();
+  caricaStato();
+  window.addEventListener('online', function () { sincronizzaCoda(); });
+})();
+
+/* Il manifest statico non può contenere il token personale, che cambia per
+   ogni dipendente: lo riscrivo al volo così l'icona sulla Home apre già
+   l'app riconosciuta. */
+function manifestConToken(tok) {
+  try {
+    const m = {
+      name: 'Timbratura', short_name: 'Timbra',
+      start_url: './?d=' + encodeURIComponent(tok),
+      scope: './', display: 'standalone',
+      background_color: '#EEF2F5', theme_color: '#0E2038',
+      icons: [
+        { src: 'icona-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: 'icona-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(m)], { type: 'application/manifest+json' });
+    $('manifestLink').href = URL.createObjectURL(blob);
+  } catch (e) {}
+}
+
+window.addEventListener('beforeinstallprompt', function (e) {
+  e.preventDefault();
+  promptInstall = e;
+  const b = $('bottoneInstalla');
+  if (b) b.classList.remove('hide');
+});
+
+function installaApp() {
+  if (!promptInstall) return;
+  promptInstall.prompt();
+  promptInstall = null;
+  const b = $('bottoneInstalla');
+  if (b) b.classList.add('hide');
+}
+
+function inStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+}
+
+function caricaStato() {
+  api('stato', { t: leggi('tb.token') }).then(function (r) {
+    if (!r.ok) {
+      if (r.code === 'NOAUTH') {
+        try { localStorage.removeItem('tb.token'); } catch (e) {}
+        schermataSenzaLink(r.err);
+        return;
+      }
+      return schermataErrore(r.err);
+    }
+    stato = r;
+    if (r.nowIso) offsetOrologio = new Date(r.nowIso).getTime() - Date.now();
+    $('nome').textContent = r.dip.nome;
+    $('etichettaChi').textContent = r.aperta ? 'Al lavoro' : 'Dipendente';
+    disegna();
+    if (coda().length) sincronizzaCoda();
+  }).catch(function (e) {
+    if (e.rete && coda().length) return schermataOffline();
+    schermataErrore(e.message);
+  });
+}
+
+/* ---------- schermate ---------- */
+function schermataSenzaLink(msg) {
+  $('nome').textContent = 'Accesso';
+  app.innerHTML =
+    '<div class="card"><div class="tape"></div><div class="card-body">' +
+    '<div class="eyebrow">Primo utilizzo</div>' +
+    '<p class="lavoro" style="font-size:26px">Apri il tuo link personale</p>' +
+    '<p style="margin-top:12px">L\'ufficio ti ha inviato un link solo tuo. Aprilo una volta da questo telefono: ' +
+    'da quel momento basterà inquadrare il QR della sede per timbrare.</p>' +
+    (msg ? '<div class="nota">' + esc(msg) + '</div>' : '') +
+    '</div></div>';
+}
+
+function schermataErrore(msg) {
+  app.innerHTML = '<div class="esito err"><h2>Qualcosa non va</h2><p>' + esc(msg || 'Errore sconosciuto.') + '</p></div>' +
+    '<div class="azioni"><button class="big" onclick="location.reload()">Riprova</button></div>';
+}
+
+function schermataOffline() {
+  const n = coda().length;
+  app.innerHTML =
+    '<div class="esito warn"><h2>Sei senza connessione</h2>' +
+    '<p>Hai ' + n + ' ' + (n === 1 ? 'timbratura in attesa' : 'timbrature in attesa') + '. ' +
+    'Partono da sole appena torna la linea: non devi rifare niente.</p></div>' +
+    '<div class="azioni"><button class="big" onclick="location.reload()">Riprova adesso</button></div>';
+}
+
+function disegna() {
+  const a = stato.aperta;
+  let html = '';
+
+  if (a) {
+    html +=
+      '<div class="card on"><div class="tape"></div><div class="card-body">' +
+      '<div class="eyebrow">In corso</div>' +
+      '<p class="lavoro">' + esc(a.lavoro) + '</p>' +
+      '<div class="cronometro" id="crono">0:00:00</div>' +
+      '<div class="dalle">Entrata registrata alle ' + esc(a.inizioOra) + ' del ' + esc(a.inizioData) + '</div>' +
+      '</div></div>';
+  } else {
+    const bloccato = !!lavoroDaQr && trovaNome(lavoroDaQr);
+    html += '<div class="card"><div class="tape"></div><div class="card-body">';
+    if (bloccato) {
+      html += '<div class="eyebrow">Sede riconosciuta dal QR</div>' +
+              '<p class="lavoro">' + esc(trovaNome(lavoroDaQr)) + '</p>' +
+              '<button class="link" onclick="sbloccaScelta()">Non è questo lavoro</button>';
+    } else {
+      html += '<div class="eyebrow">Dove stai lavorando</div>' + sceltaLavoro();
+    }
+    html += '</div></div>';
+  }
+
+  if (stato.cfg.pin) {
+    html += '<div class="blocco"><label class="campo" for="pin">Il tuo PIN</label>' +
+            '<input type="tel" id="pin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off"></div>';
+  }
+
+  html += '<div class="gps ' + gpsStato + '" id="gps"><span class="pallino"></span><span id="gpsTesto"></span></div>';
+
+  const nc = coda().length;
+  if (nc) {
+    html += '<div class="coda"><span class="pallino"></span><span><b>' + nc + '</b> ' +
+            (nc === 1 ? 'timbratura in attesa di connessione' : 'timbrature in attesa di connessione') + '</span></div>';
+  }
+
+  if (stato.storico && stato.storico.length) {
+    html += '<div class="storico"><h3>Ultime timbrature</h3>' +
+      stato.storico.map(function (r) {
+        const segn = [];
+        if (r.esito && r.esito !== 'OK' && r.esito !== 'EXTRA') segn.push(r.esito.toLowerCase());
+        if (r.differita) segn.push('offline');
+        return '<div class="riga"><b>' + esc(r.ora) + '</b>' +
+          '<span class="t ' + (r.tipo === 'ENTRATA' ? 'e' : 'u') + '">' + (r.tipo === 'ENTRATA' ? 'Entra' : 'Esce') + '</span>' +
+          '<span>' + esc(r.lavoro) + (segn.length ? ' · ' + esc(segn.join(', ')) : '') + '</span></div>';
+      }).join('') + '</div>';
+  }
+
+  if (!inStandalone()) {
+    if (isIOS()) {
+      html += '<div class="installa"><b>Mettila sulla schermata Home</b>' +
+              'Tocca il tasto Condividi in basso, poi "Aggiungi a Home". Diventa un\'icona come le altre app.</div>';
+    } else {
+      html += '<button class="ghost hide" id="bottoneInstalla" onclick="installaApp()">Aggiungi alla schermata Home</button>';
+    }
+  }
+
+  html += '<div class="azioni">';
+  if (a) {
+    html += '<button class="big esci" id="btn" onclick="timbra(\'U\')">Registra uscita</button>';
+  } else {
+    html += '<button class="big" id="btn" onclick="timbra(\'E\')">Registra entrata</button>';
+    html += '<button class="ghost" onclick="apriScanner()">Inquadra il QR della sede</button>';
+  }
+  html += '</div>';
+
+  app.innerHTML = html;
+  disegnaGps();
+  aggiornaCrono();
+  if (promptInstall) { const b = $('bottoneInstalla'); if (b) b.classList.remove('hide'); }
+}
+
+function trovaNome(cod) {
+  const l = (stato.lavori || []).filter(function (x) { return x.codice === cod; })[0];
+  return l ? l.nome : null;
+}
+function sbloccaScelta() { lavoroDaQr = null; scelta.codice = ''; filtro = ''; disegna(); }
+
+/* La cooperativa ha oltre cento lavori in elenco: una tendina sarebbe
+   inservibile. Qui si cerca scrivendo, e i cantieri su cui il dipendente ha
+   timbrato di recente stanno in cima. */
+let filtro = '';
+
+function sceltaLavoro() {
+  if (scelta.codice && scelta.codice !== '__EXTRA__') {
+    const n = trovaNome(scelta.codice);
+    if (n) {
+      return '<div class="scelto"><span>' + esc(n) + '</span>' +
+             '<button class="link" onclick="riapriScelta()">cambia</button></div>';
+    }
+  }
+
+  const tutti = stato.lavori || [];
+  const f = filtro.trim().toLowerCase();
+  let html = '';
+
+  if (tutti.length > 10 || f) {
+    html += '<div class="cerca"><input type="text" id="cercaLav" placeholder="Cerca il lavoro…" ' +
+            'value="' + esc(filtro) + '" oninput="filtraLavori(this.value)" autocomplete="off" ' +
+            'autocapitalize="off" aria-label="Cerca il lavoro"></div>';
+  }
+
+  const corrisponde = function (l) { return !f || l.nome.toLowerCase().indexOf(f) >= 0; };
+  const voce = function (l) {
+    return '<button class="voce' + (scelta.codice === l.codice ? ' sel' : '') + '" ' +
+           'onclick="scegliLavoro(\'' + esc(l.codice) + '\')">' + esc(l.nome) + '</button>';
+  };
+
+  const codRecenti = stato.recenti || [];
+  const recenti = f ? [] : codRecenti
+    .map(function (c) { return tutti.filter(function (l) { return l.codice === c; })[0]; })
+    .filter(function (l) { return !!l; });
+  const altri = tutti.filter(function (l) {
+    return corrisponde(l) && (f || codRecenti.indexOf(l.codice) < 0);
+  });
+
+  html += '<div class="elenco">';
+  if (recenti.length) {
+    html += '<div class="gruppo">Dove hai timbrato di recente</div>' + recenti.map(voce).join('');
+  }
+  if (altri.length) {
+    if (recenti.length) html += '<div class="gruppo">Tutti i lavori</div>';
+    html += altri.map(voce).join('');
+  }
+  if (!recenti.length && !altri.length) {
+    html += '<div class="vuoto">Nessun lavoro con questo nome.' +
+            (stato.cfg.extra ? ' Usa "Altro lavoro" qui sotto.' : '') + '</div>';
+  }
+  html += '</div>';
+
+  if (stato.cfg.extra) {
+    html += '<button class="ghost" onclick="scegliLavoro(\'__EXTRA__\')">Altro lavoro — lo scrivo io</button>' +
+            '<div class="blocco' + (scelta.codice === '__EXTRA__' ? '' : ' hide') + '" id="boxExtra">' +
+            '<label class="campo" for="nomeExtra">Nome del lavoro extra</label>' +
+            '<input type="text" id="nomeExtra" placeholder="es. Condominio Via Verdi 4" value="' + esc(scelta.nomeExtra) + '" ' +
+            'oninput="scelta.nomeExtra=this.value" autocomplete="off"></div>';
+  }
+  return html;
+}
+
+function filtraLavori(v) {
+  filtro = v;
+  const box = document.querySelector('.elenco');
+  if (!box) return disegna();
+  // Ridisegno solo l'elenco: così il campo di ricerca non perde il cursore.
+  const finto = document.createElement('div');
+  finto.innerHTML = sceltaLavoro();
+  const nuovo = finto.querySelector('.elenco');
+  if (nuovo) box.innerHTML = nuovo.innerHTML;
+}
+
+function scegliLavoro(cod) {
+  scelta.codice = cod;
+  if (cod === '__EXTRA__') {
+    const box = $('boxExtra');
+    if (box) box.classList.remove('hide');
+    document.querySelectorAll('.voce.sel').forEach(function (e) { e.classList.remove('sel'); });
+    const n = $('nomeExtra'); if (n) n.focus();
+    return;
+  }
+  filtro = '';
+  disegna();
+}
+
+function riapriScelta() { scelta.codice = ''; filtro = ''; disegna(); }
+
+/* ---------- timbratura ---------- */
+function codiceUnico() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function timbra(tipo, forza) {
+  const btn = $('btn');
+  const params = {
+    t: leggi('tb.token'), tipo: tipo, uid: codiceUnico(),
+    dev: (navigator.userAgent || '').slice(0, 90)
+  };
+
+  if (tipo === 'E') {
+    if (scelta.codice === '__EXTRA__') {
+      const n = ($('nomeExtra') && $('nomeExtra').value || '').trim();
+      if (n.length < 3) return avvisa('Scrivi il nome del lavoro extra.');
+      params.x = n;
+    } else if (scelta.codice) {
+      params.l = scelta.codice;
+    } else {
+      return avvisa('Scegli prima il lavoro, o inquadra il QR della sede.');
+    }
+  } else {
+    if (stato.aperta && stato.aperta.codice && stato.aperta.codice !== 'EXTRA') params.l = stato.aperta.codice;
+    else params.x = (stato.aperta && stato.aperta.lavoro) || '';
+  }
+  if (stato.cfg.pin) {
+    const p = ($('pin') && $('pin').value || '').trim();
+    if (!p) return avvisa('Inserisci il tuo PIN.');
+    params.pin = p;
+  }
+  if (forza) params.force = '1';
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Registro…'; }
+
+  chiediPosizione().then(function (pos) {
+    if (pos) { params.lat = pos.lat; params.lng = pos.lng; params.acc = pos.acc; }
+    return api('timbra', params);
+  }).then(function (r) {
+    if (r.ok) return mostraEsito(r);
+    if (r.code === 'ALTRO_APERTO') return chiediChiusura(r);
+    ripristina(btn, tipo);
+    avvisa(r.err);
+  }).catch(function (e) {
+    if (e.rete && stato.cfg.offline) {
+      params.ots = new Date(Date.now() + offsetOrologio).toISOString();
+      accoda(params);
+      return mostraInCoda(params, tipo);
+    }
+    ripristina(btn, tipo);
+    avvisa(e.message);
+  });
+}
+
+function ripristina(btn, tipo) {
+  if (btn) { btn.disabled = false; btn.textContent = tipo === 'E' ? 'Registra entrata' : 'Registra uscita'; }
+}
+
+function chiediChiusura(r) {
+  const nuovo = scelta.codice === '__EXTRA__'
+    ? ($('nomeExtra') && $('nomeExtra').value || 'il nuovo lavoro')
+    : (trovaNome(scelta.codice) || 'il nuovo lavoro');
+  app.innerHTML =
+    '<div class="esito warn"><h2>Un lavoro è ancora aperto</h2>' +
+    '<p>' + esc(r.err) + '</p>' +
+    '<p class="muto">Posso chiudere quello e aprire subito ' + esc(nuovo) + ', con l\'ora e la posizione di adesso.</p></div>' +
+    '<div class="azioni">' +
+    '<button class="big" id="btn" onclick="timbra(\'E\', true)">Chiudi e passa a ' + esc(nuovo) + '</button>' +
+    '<button class="ghost" onclick="location.reload()">Annulla</button></div>';
+}
+
+function mostraInCoda(params, tipo) {
+  const d = new Date(params.ots);
+  app.innerHTML =
+    '<div class="esito warn">' +
+    '<div class="eyebrow">Registrata sul telefono</div>' +
+    '<div class="grande">' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + '</div>' +
+    '<h2>' + esc(params.l ? (trovaNome(params.l) || params.l) : (params.x || '')) + '</h2>' +
+    '<p>' + (tipo === 'E' ? 'Entrata' : 'Uscita') + ' presa con l\'ora di adesso. Manca la connessione, quindi parte da sola appena torna la linea.</p>' +
+    '<div class="nota">Non rifare la timbratura: sarebbe doppia. L\'ufficio la vedrà segnata come registrata offline.</div>' +
+    '</div>' +
+    '<div class="azioni"><button class="big" onclick="location.reload()">Ho capito</button></div>';
+  if (navigator.vibrate) { try { navigator.vibrate([60, 80, 60]); } catch (e) {} }
+}
+
+function sincronizzaCoda() {
+  if (sincronizzando) return;
+  const c = coda();
+  if (!c.length) return;
+  sincronizzando = true;
+
+  const prossima = function () {
+    const rimaste = coda();
+    if (!rimaste.length) {
+      sincronizzando = false;
+      caricaStato();
+      return;
+    }
+    const p = rimaste[0];
+    api('timbra', p, 20000).then(function (r) {
+      // Accettata o rifiutata, la tolgo: se è un doppione o è troppo vecchia
+      // riprovarla all'infinito non la farebbe mai passare.
+      const q = coda(); q.shift(); salvaCoda(q);
+      prossima();
+    }).catch(function (e) {
+      // Manca ancora la rete: lascio tutto in coda e riprovo più tardi.
+      sincronizzando = false;
+    });
+  };
+  prossima();
+}
+
+function mostraEsito(r) {
+  const buono = r.esito === 'OK' || r.esito === 'EXTRA';
+  const classe = buono ? '' : (r.esito === 'FUORI ZONA' ? ' err' : ' warn');
+  let msg = '';
+  if (r.esito === 'FUORI ZONA') msg = 'Attenzione: risulti a ' + r.distanza + ' m dal luogo di lavoro. La timbratura è registrata ma verrà verificata.';
+  else if (r.esito === 'GPS ASSENTE') msg = 'Registrata senza posizione: il telefono non l\'ha fornita.';
+  else if (r.esito === 'GPS IMPRECISO') msg = 'Posizione poco precisa, registrata comunque.';
+
+  app.innerHTML =
+    '<div class="esito' + classe + '">' +
+    '<div class="eyebrow">' + (r.tipo === 'ENTRATA' ? 'Entrata registrata' : 'Uscita registrata') + '</div>' +
+    '<div class="grande">' + esc(r.ora) + '</div>' +
+    '<h2>' + esc(r.lavoro) + '</h2>' +
+    (r.durata ? '<p><b>Durata: ' + esc(r.durata) + '</b></p>' : '') +
+    '<p class="muto">' + esc(r.data) + '</p>' +
+    (msg ? '<div class="nota">' + esc(msg) + '</div>' : '') +
+    '</div>' +
+    '<div class="azioni"><button class="big" onclick="location.reload()">Torna alla schermata</button></div>';
+  if (navigator.vibrate) { try { navigator.vibrate(buono ? 60 : [60, 80, 60]); } catch (e) {} }
+}
+
+function avvisa(msg) {
+  const g = $('gps');
+  if (!g) return alert(msg);
+  let box = document.querySelector('.nota.volante');
+  if (!box) { box = document.createElement('div'); box.className = 'nota volante'; g.parentNode.insertBefore(box, g.nextSibling); }
+  box.textContent = msg;
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function esc(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ---------- lettore QR interno ---------- */
+let lettore = null;
+function apriScanner() {
+  $('scanner').classList.add('aperto');
+  if (window.Html5Qrcode) return partiScanner();
+  const s = document.createElement('script');
+  s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+  s.onload = partiScanner;
+  s.onerror = function () { chiudiScanner(); avvisa('Lettore non disponibile. Usa la fotocamera del telefono per inquadrare il QR.'); };
+  document.head.appendChild(s);
+}
+function partiScanner() {
+  try {
+    lettore = new Html5Qrcode('lettore');
+    lettore.start({ facingMode: 'environment' }, { fps: 10, qrbox: 250 }, function (testo) {
+      let cod = null;
+      try { cod = new URL(testo).searchParams.get('l'); } catch (e) { cod = null; }
+      if (!cod) return;
+      chiudiScanner();
+      lavoroDaQr = cod.toUpperCase();
+      scelta.codice = lavoroDaQr;
+      disegna();
+    });
+  } catch (e) {
+    chiudiScanner();
+    avvisa('Fotocamera non accessibile. Usa la fotocamera del telefono per inquadrare il QR.');
+  }
+}
+function chiudiScanner() {
+  $('scanner').classList.remove('aperto');
+  if (lettore) {
+    try { lettore.stop().then(function () { lettore.clear(); lettore = null; }); } catch (e) { lettore = null; }
+  }
+}
+</script>
+</body>
+</html>
