@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ECE840">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Coop SG">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" href="../icona-192.png">
+<link rel="manifest" href="../manifest.json">
+<title>Interventi</title>
+
+<!--
+  INTERVENTI — dentro l'app unica (versione 16)
+
+  La apre chi ha "interventi" nella colonna Pagina del foglio Dipendenti,
+  per esempio Enzo Durante: registra un lavoro alla volta invece delle ore.
+  E' la pagina di prima (Interventi.html), spostata su GitHub.
+
+  Tre passaggi, come la pagina delle ore:
+  1. carica()   chiede al foglio tipi di lavoro, luoghi e interventi del mese
+  2. disegna()  costruisce la schermata
+  3. salva()    manda l'intervento al foglio, che lo scrive nel Registro
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../comune.css">
+
+<style>
+  .tipi { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tipo { min-height: 54px; padding: 8px 12px; font-size: 15px; line-height: 1.2; font-weight: 500;
+          border: 1.5px solid var(--linea); border-radius: 12px; background: var(--bianco);
+          color: var(--inchiostro); text-align: left; }
+  .tipo.scelto { background: var(--inchiostro); border-color: var(--inchiostro); color: #fff; }
+
+  .euro { position: relative; }
+  .euro input { padding-right: 36px; }
+  .euro span { position: absolute; right: 14px; top: 13px; color: var(--grigio); }
+  #salva { margin-top: 20px; }
+
+  .riepilogo { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 4px; gap: 10px; }
+  .riepilogo b { font-family: "Barlow Condensed", sans-serif; font-size: 28px; font-weight: 700; }
+  .riepilogo span { font-size: 14px; color: var(--grigio); text-align: right; }
+  .voce { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px 0;
+          border-top: 1px solid var(--linea-chiara); }
+  .voce .cosa { font-size: 16px; font-weight: 500; }
+  .voce .dove { font-size: 14px; color: var(--grigio); }
+  .voce .note { grid-column: 1 / -1; font-size: 14px; color: var(--grigio); }
+  .voce .soldi { text-align: right; font-size: 16px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .togli { background: none; border: 0; color: var(--rosso); font-size: 14px; padding: 6px 0 0; text-align: right; }
+  .vuoto { color: var(--grigio); font-size: 15px; padding: 12px 0 4px; }
+  #mese { margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<main class="pagina" style="padding-bottom:40px">
+  <div class="testata">
+    <a class="casa" href="../"><img src="../icona-192.png" alt="">Home</a>
+    <h1 id="nome">Interventi</h1>
+    <p>Registra i tuoi interventi</p>
+  </div>
+  <div id="messaggio"></div>
+  <div id="corpo"><p class="attesa">Carico i tuoi interventi…</p></div>
+</main>
+
+<script src="../config.js"></script>
+<script src="../comune.js"></script>
+<script>
+/* ================================================================
+   VARIABILI GENERALI
+   ================================================================ */
+
+codiciDaIndirizzo();
+var CODICE = leggiCodice('o');   /* codice ore, ricordato dal telefono */
+var D = null;                   /* dati ricevuti dal foglio */
+var tipoScelto = '';            /* tipo di lavoro selezionato */
+
+
+/* ================================================================
+   FUNZIONI DI SERVIZIO
+   ================================================================ */
+
+/* "Pulizia divano — 21/10/2026 (2)" diventa { tipo: "Pulizia divano", data: "21/10" } */
+function leggiVoce(v) {
+  var p = String(v).split(' — ');
+  var m = String(p[1] || '').match(/(\d{2}\/\d{2})/);
+  return { tipo: p[0], data: m ? m[1] : '' };
+}
+
+/* ================================================================
+   1. CARICAMENTO
+   ================================================================ */
+
+function carica(mese) {
+  if (!CODICE) {
+    document.getElementById('corpo').innerHTML =
+      '<div class="avviso">Apri il link personale che ti ha mandato l\'ufficio.</div>';
+    return;
+  }
+  api('interventi.carica', { o: CODICE, mese: mese }).then(disegna).catch(function (e) {
+    document.getElementById('corpo').innerHTML = '<div class="avviso errore">' + esc(e.message) + '</div>';
+  });
+}
+
+
+/* ================================================================
+   2. DISEGNO DELLA SCHERMATA
+   ================================================================ */
+
+function disegna(d) {
+  var c = document.getElementById('corpo');
+  D = d;
+  if (d.messaggio) avvisa(d.messaggio, true);
+  document.getElementById('nome').textContent = d.nome;
+
+  /* il modulo si disegna una volta sola, cosi' non si perde quello che si sta scrivendo */
+  if (!document.getElementById('modulo')) {
+    var h = '<div class="card" id="modulo"><h2>Nuovo intervento</h2>';
+
+    h += '<label class="campo">Tipo di lavoro</label><div class="tipi">';
+    d.tipi.forEach(function (t, i) {
+      h += '<button type="button" class="tipo" id="tipo' + i + '" onclick="scegliTipo(' + i + ')">' +
+           esc(t) + '</button>';
+    });
+    h += '</div>';
+
+    h += '<label class="campo" for="data">Data</label>' +
+         '<input type="date" id="data" value="' + d.oggi + '" max="' + d.oggi + '">';
+
+    h += '<label class="campo" for="luogo">Luogo</label>' +
+         '<input type="text" id="luogo" list="elencoLuoghi" autocomplete="off" ' +
+         'placeholder="Cerca o scrivi dove hai lavorato">' +
+         '<datalist id="elencoLuoghi"></datalist>';
+
+    h += '<label class="campo" for="info">Informazioni <span class="facolt">(cosa hai fatto)</span></label>' +
+         '<textarea id="info" placeholder="Divano 3 posti in tessuto, macchia sul bracciolo"></textarea>';
+
+    h += '<label class="campo" for="note">Note <span class="facolt">(facoltative)</span></label>' +
+         '<input type="text" id="note" placeholder="Qualcosa da segnalare all\'ufficio">';
+
+    h += '<label class="campo" for="pagamento">Pagamento <span class="facolt">(se lo conosci)</span></label>' +
+         '<div class="euro"><input type="number" id="pagamento" inputmode="decimal" min="0" step="0.5" ' +
+         'placeholder="Lascia vuoto se non lo sai"><span>€</span></div>' +
+         '<div class="aiuto">Se lo lasci vuoto lo inserisce l\'ufficio.</div>';
+
+    h += '<button class="primo" id="salva" onclick="salva()">Salva intervento</button></div>';
+
+    h += '<div class="card"><h2>I tuoi interventi</h2>' +
+         '<select id="mese" onchange="carica(this.value)"></select><div id="elenco"></div></div>';
+    c.innerHTML = h;
+  }
+
+  /* luoghi per la ricerca */
+  document.getElementById('elencoLuoghi').innerHTML = d.luoghi.map(function (l) {
+    return '<option value="' + esc(l) + '">';
+  }).join('');
+
+  /* scelta del mese da guardare */
+  document.getElementById('mese').innerHTML = d.mesi.map(function (m) {
+    return '<option' + (m === d.mese ? ' selected' : '') + '>' + esc(m) + '</option>';
+  }).join('');
+
+  disegnaElenco();
+}
+
+/* L'elenco degli interventi del mese scelto, dal piu' recente. */
+function disegnaElenco() {
+  var d = D, h = '';
+  h += '<div class="riepilogo"><b>' + eur(d.totale) + '</b><span>' +
+       d.elenco.length + (d.elenco.length === 1 ? ' intervento' : ' interventi') +
+       (d.daPrezzare ? ', ' + d.daPrezzare + ' da prezzare' : '') + '</span></div>';
+
+  if (!d.elenco.length) {
+    h += '<div class="vuoto">Nessun intervento registrato in ' + esc(d.mese) + '.</div>';
+  }
+
+  d.elenco.forEach(function (x, i) {
+    var v = leggiVoce(x.voce);
+    var soldi;
+    if (x.stato === 'Da prezzare') soldi = '<span class="etichetta ambra">da prezzare</span>';
+    else soldi = eur(x.importo);
+
+    h += '<div class="voce"><div><div class="cosa">' + esc(v.data) + ', ' + esc(v.tipo) + '</div>' +
+         '<div class="dove">' + esc(x.luogo) + '</div></div>' +
+         '<div class="soldi">' + soldi +
+         (x.stato === 'Corretto' ? '<br><span class="etichetta verde">controllato</span>' : '') +
+         (x.cancellabile ? '<br><button class="togli" onclick="togli(' + i + ')">Cancella</button>' : '') +
+         '</div>' +
+         (x.note ? '<div class="note">' + esc(x.note) + '</div>' : '') + '</div>';
+  });
+  document.getElementById('elenco').innerHTML = h;
+}
+
+function scegliTipo(i) {
+  tipoScelto = D.tipi[i];
+  D.tipi.forEach(function (t, j) {
+    document.getElementById('tipo' + j).className = 'tipo' + (j === i ? ' scelto' : '');
+  });
+}
+
+
+/* ================================================================
+   3. SALVATAGGIO E CANCELLAZIONE
+   ================================================================ */
+
+function salva() {
+  var luogo = document.getElementById('luogo').value.trim();
+  var data = document.getElementById('data').value;
+  if (!tipoScelto) return avvisa('Scegli il tipo di lavoro.');
+  if (!data) return avvisa('Scegli la data.');
+  if (!luogo) return avvisa('Scrivi dove hai lavorato.');
+
+  var b = document.getElementById('salva');
+  b.disabled = true; b.textContent = 'Salvo…';
+
+  api('interventi.salva', {
+      o: CODICE, tipo: tipoScelto, data: data, luogo: luogo,
+      info: document.getElementById('info').value,
+      note: document.getElementById('note').value,
+      pagamento: document.getElementById('pagamento').value
+    })
+    .then(function (r) {
+      b.disabled = false; b.textContent = 'Salva intervento';
+      /* svuoto il modulo per il prossimo intervento, tengo la data */
+      ['luogo', 'info', 'note', 'pagamento'].forEach(function (id) {
+        document.getElementById(id).value = '';
+      });
+      tipoScelto = '';
+      D.tipi.forEach(function (t, j) { document.getElementById('tipo' + j).className = 'tipo'; });
+      disegna(r);
+    })
+    .catch(function (e) {
+      b.disabled = false; b.textContent = 'Salva intervento';
+      avvisa(e.rete ? e.message + ' Prima di rifarlo controlla qui sotto se è stato salvato.' : e.message);
+    });
+}
+
+function togli(i) {
+  var x = D.elenco[i], v = leggiVoce(x.voce);
+  if (!confirm('Cancello l\'intervento del ' + v.data + ' a ' + x.luogo + '?')) return;
+  api('interventi.elimina', { o: CODICE, mese: D.mese, luogo: x.luogo, voce: x.voce })
+    .then(function (r) { disegna(r); avvisa('Intervento cancellato.', true); })
+    .catch(function (e) { avvisa(e.message); });
+}
+
+
+/* ================================================================
+   AVVIO
+   ================================================================ */
+
+manifestPersonale();
+registraSW();
+carica(null);
+</script>
+</body>
+</html>

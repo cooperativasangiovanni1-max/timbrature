@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E2038">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Master">
+<meta name="robots" content="noindex">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" href="../icona-192.png">
+<title>Master — Coop San Giovanni</title>
+
+<!--
+  LINK MASTER — per chi gestisce e per il titolare (versione 16)
+
+  Si apre con il link master (menu di Gestione ore: "Crea il link master").
+  Vede e corregge tutto, mese per mese:
+    Dipendenti   ore, fissi, spese, bonifici: si correggono qui come nella Scheda
+    Lavori       chi ci ha lavorato e quanto costa, con la spunta "fatturato"
+    Timbrature   tutti i turni, con le uscite dimenticate da sistemare
+    Deposito     quanto resta, quando ordinare, chi ha preso cosa
+    Link         i link personali da mandare su WhatsApp
+
+  Ogni correzione va subito nel foglio. Le righe corrette diventano "Corretto"
+  e l'app del dipendente non le sovrascrive piu'.
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --inchiostro: #0E2038;
+    --inchiostro-2: #1B3355;
+    --grigio: #5A6B7D;
+    --linea: #D6DEE6;
+    --linea-chiara: #E8EDF1;
+    --carta: #F3F5F7;
+    --bianco: #FFFFFF;
+    --giallo: #ECE840;
+    --blu: #2F6AB0;
+    --fatto: #0F7A57;
+    --fatto-chiaro: #E3F2EB;
+    --dafare: #9A6A00;
+    --dafare-chiaro: #FFF3D1;
+    --rosso: #B4232A;
+    --rosso-chiaro: #FBE9EA;
+    --barra: #C5D2E3;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--carta); color: var(--inchiostro);
+         font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+         font-size: 16px; line-height: 1.45; padding-bottom: env(safe-area-inset-bottom); }
+  .pagina { max-width: 1040px; margin: 0 auto; padding: 16px 18px 70px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--blu); outline-offset: 2px; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .nascosto { display: none !important; }
+  .solo-tel { display: none; }
+
+  /* ---------- testata ---------- */
+  .testata { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+             color: var(--grigio); font-size: 14px; }
+  .marchio { display: flex; align-items: center; gap: 10px; }
+  .marchio img { width: 34px; height: 34px; border-radius: 9px; }
+  .marchio strong { color: var(--inchiostro); font-family: "Barlow Condensed", sans-serif;
+                    font-size: 21px; font-weight: 700; }
+  .aggiorna { background: var(--bianco); border: 1px solid var(--linea); border-radius: 8px;
+              padding: 7px 13px; font-size: 14px; }
+
+  /* ---------- la frase del mese ---------- */
+  .frase { font-size: clamp(21px, 3.4vw, 32px); line-height: 1.32; font-weight: 400;
+           margin: 22px 0 26px; max-width: 31em; }
+  .frase b { font-weight: 600; }
+  .frase .dafare { color: var(--dafare); }
+  .frase .fatto { color: var(--fatto); }
+  .mese { appearance: none; -webkit-appearance: none; border: 0; background: none; font-size: inherit;
+          font-weight: 600; padding: 0; cursor: pointer; border-bottom: 3px solid var(--inchiostro);
+          border-radius: 0; line-height: 1.15; }
+
+  /* ---------- schede ---------- */
+  .comandi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+             border-bottom: 1px solid var(--linea); margin-bottom: 4px; }
+  .schede { display: flex; gap: 20px; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+  .schede::-webkit-scrollbar { display: none; }
+  .scheda { background: none; border: 0; padding: 10px 0 12px; font-size: 17px; color: var(--grigio);
+            border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+  .scheda[aria-selected="true"] { color: var(--inchiostro); font-weight: 600; border-bottom-color: var(--inchiostro); }
+  .filtri { margin-left: auto; display: flex; align-items: center; gap: 14px; padding-bottom: 6px; }
+  .cerca { border: 1px solid var(--linea); border-radius: 8px; background: var(--bianco);
+           padding: 7px 10px; width: 210px; }
+  .solo { font-size: 14px; color: var(--grigio); display: flex; align-items: center; gap: 6px;
+          cursor: pointer; white-space: nowrap; }
+
+  /* ---------- righe degli elenchi ---------- */
+  .riga { border-bottom: 1px solid var(--linea); }
+  .testa-riga { display: grid; align-items: center; gap: 4px 16px; width: 100%; padding: 14px 4px;
+                background: none; border: 0; text-align: left; }
+  .testa-riga:hover { background: rgba(14, 32, 56, .03); }
+  .nome { font-size: 17px; font-weight: 600; }
+  .breve { font-size: 14px; color: var(--grigio); }
+  .importo { font-size: 17px; text-align: right; }
+  .freccia { width: 10px; height: 10px; border-right: 2px solid var(--grigio); border-bottom: 2px solid var(--grigio);
+             transform: rotate(45deg); transition: transform .15s; justify-self: end; margin-top: -4px; }
+  .riga.aperta > .testa-riga .freccia, .riga.aperta > .lavoro-testa .freccia { transform: rotate(-135deg); margin-top: 4px; }
+
+  .persona > .testa-riga { grid-template-columns: minmax(0, 1fr) 150px 140px 14px; }
+  .lavoro { display: grid; grid-template-columns: 54px minmax(0, 1fr); }
+  .lavoro > .testa-riga { grid-template-columns: minmax(0, 1fr) 140px 120px 14px; padding-left: 0; }
+  .lavoro > .aperto-qui { grid-column: 1 / -1; padding-left: 54px; }
+  .turnista > .testa-riga { grid-template-columns: minmax(0, 1fr) 140px 14px; }
+
+  .barra-sfondo { height: 8px; background: #E9EDF1; border-radius: 4px; overflow: hidden; }
+  .barra-piena { display: block; height: 100%; background: var(--barra); border-radius: 4px; }
+
+  .stato { font-size: 13px; padding: 3px 10px; border-radius: 12px; justify-self: start; white-space: nowrap; }
+  .stato.verde { background: var(--fatto-chiaro); color: var(--fatto); }
+  .stato.ambra { background: var(--dafare-chiaro); color: #7A5400; }
+  .stato.grigio { background: #ECF0F3; color: var(--grigio); }
+  .stato.rosso { background: var(--rosso-chiaro); color: var(--rosso); }
+  .segnale { color: var(--dafare); font-weight: 600; }
+  .verde-t { color: var(--fatto); }
+
+  /* ---------- la spunta "fatturato" ---------- */
+  .spunta { display: flex; align-items: center; justify-content: center; position: relative; }
+  .spunta input { position: absolute; opacity: 0; width: 1px; height: 1px; left: 0; top: 0; pointer-events: none; }
+  .spunta label { width: 34px; height: 34px; border-radius: 8px; cursor: pointer; border: 2px solid #AEB8C2;
+                  background: var(--bianco); display: flex; align-items: center; justify-content: center; }
+  .spunta label svg { width: 20px; height: 20px; opacity: 0; }
+  .spunta input:checked + label { background: var(--fatto); border-color: var(--fatto); }
+  .spunta input:checked + label svg { opacity: 1; }
+  .spunta input:focus-visible + label { outline: 3px solid var(--blu); outline-offset: 2px; }
+
+  /* ---------- dettaglio che si apre ---------- */
+  .aperto-qui { display: none; padding: 4px 4px 24px; }
+  .riga.aperta > .aperto-qui { display: block; }
+  .blocco + .blocco { margin-top: 20px; }
+  .blocco h3 { font-size: 14px; font-weight: 600; color: var(--grigio); margin: 0 0 6px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  td, th { padding: 7px 8px 7px 0; text-align: left; vertical-align: middle; border-bottom: 1px solid var(--linea-chiara); }
+  th { font-weight: 400; color: var(--grigio); font-size: 13px; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .nota { color: var(--grigio); font-size: 13px; }
+  tr.totale td { font-weight: 600; border-bottom: 0; }
+  .conti { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px 22px; margin-bottom: 6px; }
+  .conti div { font-size: 13px; color: var(--grigio); }
+  .conti b { display: block; font-size: 18px; color: var(--inchiostro); font-weight: 600; }
+  .conti .netto b { color: var(--fatto); }
+
+  /* caselle da correggere */
+  .cas { width: 84px; height: 36px; border: 1.5px solid var(--linea); border-radius: 8px; padding: 0 8px;
+         text-align: right; background: var(--bianco); font-variant-numeric: tabular-nums; }
+  .cas.largo { width: 100%; text-align: left; }
+  .cas.ora { width: 82px; text-align: center; }
+  .cas:focus { outline: 3px solid var(--blu); outline-offset: -1px; border-color: var(--blu); }
+  tr.cambiata td { background: #FFFBE6; }
+  .bott { border: 1px solid var(--linea); background: var(--bianco); border-radius: 8px; padding: 6px 12px; font-size: 14px; }
+  .bott.primo { background: var(--inchiostro); color: #fff; border-color: var(--inchiostro); }
+  .bott.rosso { color: var(--rosso); }
+  .bott:disabled { opacity: .5; }
+  .modulo { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px;
+            align-items: end; background: #F7F9FA; border: 1px solid var(--linea-chiara); border-radius: 10px;
+            padding: 12px; margin-top: 10px; }
+  .modulo label { font-size: 13px; color: var(--grigio); display: block; }
+  .modulo .cas { width: 100%; text-align: left; margin-top: 3px; }
+  .timb { font-size: 13px; color: var(--inchiostro-2); white-space: nowrap; }
+  .timb.diversa { color: var(--dafare); font-weight: 600; }
+
+  .vuoto, .attesa { color: var(--grigio); padding: 26px 4px; }
+  .errore { background: var(--dafare-chiaro); color: #5C4000; border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
+  #messaggio { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 20; width: min(92vw, 520px); }
+  #messaggio div { background: var(--inchiostro); color: #fff; border-radius: 10px; padding: 12px 16px;
+                   box-shadow: 0 10px 30px rgba(14, 32, 56, .25); font-size: 15px; }
+  #messaggio div.male { background: var(--rosso); }
+
+  .sezione { margin: 26px 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .sezione h2 { font-family: "Barlow Condensed", sans-serif; font-size: 24px; font-weight: 700; margin: 0; }
+  .sezione .spiega { color: var(--grigio); font-size: 14px; }
+
+  .link-riga { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr) auto; gap: 8px 14px;
+               align-items: center; padding: 12px 0; border-bottom: 1px solid var(--linea); }
+  .link-riga input { width: 100%; height: 36px; border: 1px solid var(--linea); border-radius: 8px;
+                     padding: 0 8px; font-size: 13px; color: var(--grigio); background: #F7F9FA; }
+  .link-riga .azioni { display: flex; gap: 6px; }
+
+  @media (max-width: 720px) {
+    .pagina { padding: 12px 14px 70px; }
+    .filtri { margin-left: 0; width: 100%; justify-content: space-between; padding-bottom: 10px; }
+    .cerca { width: 100%; max-width: 230px; }
+    .lavoro { grid-template-columns: 46px minmax(0, 1fr); }
+    .lavoro > .aperto-qui { padding-left: 0; }
+    .lavoro > .testa-riga, .persona > .testa-riga { grid-template-columns: minmax(0, 1fr) auto 14px; }
+    .testa-riga .barra-sfondo { grid-column: 1 / 2; grid-row: 3; margin-top: 4px; }
+    .persona > .testa-riga .stato { grid-column: 1 / 2; grid-row: 2; }
+    .colonna-media { display: none; }
+    .solo-tel { display: inline-block !important; margin-top: 4px; }
+    .tabella-scorre { overflow-x: auto; }
+    .link-riga { grid-template-columns: 1fr auto; }
+    .link-riga input { grid-column: 1 / -1; grid-row: 2; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="pagina">
+  <div class="testata">
+    <div class="marchio"><img src="../icona-192.png" alt=""><strong>Master</strong> <span id="aggiornato"></span></div>
+    <button class="aggiorna" onclick="aggiornaTutto()">Aggiorna</button>
+  </div>
+
+  <h1 class="frase" id="frase"><span class="attesa">Carico i numeri del mese…</span></h1>
+
+  <div class="comandi nascosto" id="comandi">
+    <div class="schede" role="tablist">
+      <button class="scheda" role="tab" id="tab-persone" aria-selected="true" onclick="scegliScheda('persone')">Dipendenti</button>
+      <button class="scheda" role="tab" id="tab-lavori" aria-selected="false" onclick="scegliScheda('lavori')">Lavori</button>
+      <button class="scheda" role="tab" id="tab-timbrature" aria-selected="false" onclick="scegliScheda('timbrature')">Timbrature</button>
+      <button class="scheda" role="tab" id="tab-deposito" aria-selected="false" onclick="scegliScheda('deposito')">Deposito</button>
+      <button class="scheda" role="tab" id="tab-link" aria-selected="false" onclick="scegliScheda('link')">Link</button>
+    </div>
+    <div class="filtri">
+      <label class="solo nascosto" id="filtro-solo"><input type="checkbox" id="solo" onchange="disegnaElenco()"> <span id="filtro-testo">Solo da fatturare</span></label>
+      <input class="cerca" id="cerca" type="search" placeholder="Cerca un nome" oninput="disegnaElenco()" aria-label="Cerca">
+    </div>
+  </div>
+
+  <div id="elenco"></div>
+</main>
+<div id="messaggio" aria-live="polite"></div>
+
+<script src="../config.js"></script>
+<script src="../comune.js"></script>
+<script>
+/* ================================================================
+   VARIABILI GENERALI
+   ================================================================ */
+
+codiciDaIndirizzo();
+var CHIAVE = leggiCodice('k');    /* codice del link master, ricordato dal telefono */
+var D = null;                     /* il mese: dipendenti e lavori */
+var T = null;                     /* le timbrature del mese */
+var DEP = null;                   /* il deposito */
+var LNK = null;                   /* i link personali */
+var DETT = {};                    /* il dettaglio delle persone aperte */
+var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {} };
+
+var SVG_SPUNTA = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#fff" ' +
+                 'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function ore(n) { return num(n) + (Number(n) === 1 ? ' ora' : ' ore'); }
+function q(s) { return String(s).replace(/'/g, "\\'"); }
+
+function corrisponde(testo) {
+  var x = document.getElementById('cerca').value.trim().toLowerCase();
+  return !x || String(testo).toLowerCase().indexOf(x) >= 0;
+}
+
+/* messaggio in basso che sparisce da solo */
+function dici(testo, male) {
+  var box = document.getElementById('messaggio');
+  box.innerHTML = '<div' + (male ? ' class="male"' : '') + '>' + esc(testo) + '</div>';
+  clearTimeout(dici.t);
+  dici.t = setTimeout(function () { box.innerHTML = ''; }, male ? 8000 : 3500);
+}
+
+/* L'icona sulla Home apre il master, gia' riconosciuto. */
+function manifestMaster() {
+  try {
+    var m = { name: 'Master Coop SG', short_name: 'Master', start_url: RADICE + 'master/?k=' + encodeURIComponent(CHIAVE),
+              scope: RADICE, display: 'standalone', background_color: '#F3F5F7', theme_color: '#0E2038',
+              icons: [{ src: new URL('icona-192.png', RADICE).href, sizes: '192x192', type: 'image/png' },
+                      { src: new URL('icona-512.png', RADICE).href, sizes: '512x512', type: 'image/png' }] };
+    var l = document.createElement('link');
+    l.rel = 'manifest';
+    l.href = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: 'application/manifest+json' }));
+    document.head.appendChild(l);
+  } catch (e) {}
+}
+
+
+/* ================================================================
+   1. CARICAMENTO
+   ================================================================ */
+
+function caricaMese(mese) {
+  document.getElementById('elenco').innerHTML = '<div class="attesa">Carico…</div>';
+  return api('master.mese', { k: CHIAVE, mese: mese }).then(function (d) {
+    D = d; STATO.mese = d.mese; T = null; DETT = {};
+    disegnaTutto();
+  }).catch(function (e) {
+    document.getElementById('frase').innerHTML = '';
+    document.getElementById('elenco').innerHTML = '<div class="errore">' + esc(e.message) +
+      (/non valido/.test(e.message) ? ' Chiedi il link nuovo a chi gestisce il foglio.' : '') + '</div>';
+  });
+}
+
+/* Ricarica solo i numeri del mese, senza chiudere niente (dopo una correzione). */
+function rinfrescaMese() {
+  return api('master.mese', { k: CHIAVE, mese: STATO.mese }).then(function (d) {
+    D = d; disegnaFrase(); if (STATO.scheda === 'persone' || STATO.scheda === 'lavori') disegnaElenco();
+  }).catch(function () {});
+}
+
+function aggiornaTutto() {
+  DEP = null; LNK = null; T = null;
+  caricaMese(STATO.mese);
+}
+
+function caricaTimbrature() {
+  document.getElementById('elenco').innerHTML = '<div class="attesa">Carico le timbrature…</div>';
+  api('master.timbrature', { k: CHIAVE, mese: STATO.mese }).then(function (t) {
+    T = t; if (STATO.scheda === 'timbrature') disegnaElenco();
+  }).catch(function (e) { document.getElementById('elenco').innerHTML = '<div class="errore">' + esc(e.message) + '</div>'; });
+}
+
+function caricaDeposito() {
+  document.getElementById('elenco').innerHTML = '<div class="attesa">Carico il deposito…</div>';
+  api('master.deposito', { k: CHIAVE, mesi: STATO.mesiDep }).then(function (d) {
+    DEP = d; if (STATO.scheda === 'deposito') disegnaElenco();
+  }).catch(function (e) { document.getElementById('elenco').innerHTML = '<div class="errore">' + esc(e.message) + '</div>'; });
+}
+
+function caricaLink() {
+  document.getElementById('elenco').innerHTML = '<div class="attesa">Carico i link…</div>';
+  api('master.persone', { k: CHIAVE }).then(function (d) {
+    LNK = d; if (STATO.scheda === 'link') disegnaElenco();
+  }).catch(function (e) { document.getElementById('elenco').innerHTML = '<div class="errore">' + esc(e.message) + '</div>'; });
+}
+
+
+/* ================================================================
+   2. DISEGNO GENERALE
+   ================================================================ */
+
+function disegnaTutto() {
+  document.getElementById('aggiornato').textContent = 'aggiornato alle ' + D.aggiornato.slice(-5);
+  document.getElementById('comandi').classList.remove('nascosto');
+  disegnaFrase();
+  disegnaElenco();
+}
+
+function disegnaFrase() {
+  var t = D.totali;
+  var scelta = '<select class="mese" aria-label="Mese" onchange="cambiaMese(this.value)">' +
+    D.mesi.map(function (m) { return '<option' + (m === D.mese ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select>';
+  var h = 'Per ' + scelta + ' ci sono <b class="num">' + eur(t.daPagare) + '</b> da pagare a ' + plurale(t.persone, 'persona', 'persone');
+  if (t.inviati && t.inviati === t.persone) h += ', e tutti hanno già inviato le ore. ';
+  else if (t.inviati) h += '; ' + t.inviati + (t.inviati === 1 ? ' ha' : ' hanno') + ' già inviato le ore. ';
+  else h += '. ';
+  if (!t.lavori) h += 'Nessun lavoro registrato.';
+  else if (!t.daFatturare) h += '<span class="fatto">' + (t.lavori === 1 ? 'L\'unico lavoro è fatturato.' : 'Tutti i ' + t.lavori + ' lavori sono fatturati.') + '</span>';
+  else h += '<span class="dafare">' + (t.lavori === 1 ? 'Il lavoro è ancora da fatturare.' :
+            '<b>' + t.daFatturare + '</b> lavori su ' + t.lavori + ' ' + (t.daFatturare === 1 ? 'è' : 'sono') + ' ancora da fatturare.') + '</span>';
+  if (t.daPrezzare) h += ' <span class="dafare">' + plurale(t.daPrezzare, 'intervento', 'interventi') + ' da prezzare.</span>';
+  var segn = D.persone.reduce(function (s, p) { return s + (p.segnalazioniTimbrature || 0); }, 0);
+  if (segn) h += ' <span class="dafare">' + plurale(segn, 'turno timbrato', 'turni timbrati') + ' da controllare.</span>';
+  document.getElementById('frase').innerHTML = h;
+  adattaMese();
+  /* ricalcolo quando il carattere e' arrivato, se no la misura e' sbagliata */
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(adattaMese);
+}
+
+/* la tendina del mese larga quanto il mese scritto */
+function adattaMese() {
+  var sel = document.querySelector('.mese');
+  if (!sel) return;
+  var p = document.createElement('span');
+  p.className = 'mese';
+  p.style.cssText = 'position:absolute;visibility:hidden;border:0;white-space:nowrap';
+  p.textContent = sel.value;
+  sel.parentNode.appendChild(p);
+  sel.style.width = (p.getBoundingClientRect().width + 4) + 'px';
+  p.remove();
+}
+
+function cambiaMese(m) { STATO.aperti = {}; caricaMese(m); }
+
+function scegliScheda(s) {
+  STATO.scheda = s;
+  ['persone', 'lavori', 'timbrature', 'deposito', 'link'].forEach(function (x) {
+    document.getElementById('tab-' + x).setAttribute('aria-selected', x === s);
+  });
+  var testoFiltro = { lavori: 'Solo da fatturare', timbrature: 'Solo da controllare' }[s];
+  document.getElementById('filtro-solo').classList.toggle('nascosto', !testoFiltro);
+  if (testoFiltro) document.getElementById('filtro-testo').textContent = testoFiltro;
+  document.getElementById('solo').checked = false;
+  document.getElementById('cerca').placeholder = s === 'lavori' ? 'Cerca un lavoro' : (s === 'deposito' ? 'Cerca un prodotto o un nome' : 'Cerca un nome');
+  if (s === 'timbrature' && !T) return caricaTimbrature();
+  if (s === 'deposito' && !DEP) return caricaDeposito();
+  if (s === 'link' && !LNK) return caricaLink();
+  disegnaElenco();
+}
+
+function disegnaElenco() {
+  var el = document.getElementById('elenco');
+  var f = { persone: elencoPersone, lavori: elencoLavori, timbrature: elencoTimbrature,
+            deposito: elencoDeposito, link: elencoLink }[STATO.scheda];
+  el.innerHTML = f();
+  if (STATO.scheda === 'persone') Object.keys(STATO.aperti).forEach(function (id) {
+    if (STATO.aperti[id] && id.charAt(0) === 'p') riempiPersona(id);
+  });
+}
+
+function apri(id) {
+  STATO.aperti[id] = !STATO.aperti[id];
+  var r = document.getElementById(id);
+  if (!r) return;
+  r.classList.toggle('aperta', STATO.aperti[id]);
+  var b = r.querySelector('.testa-riga');
+  if (b) b.setAttribute('aria-expanded', STATO.aperti[id]);
+  if (STATO.aperti[id] && id.charAt(0) === 'p') riempiPersona(id);
+}
+
+function testaRiga(id, sinistra, centro, destra) {
+  return '<button class="testa-riga" aria-expanded="' + !!STATO.aperti[id] + '" onclick="apri(\'' + id + '\')">' +
+         '<span>' + sinistra + '</span>' + centro + '<span class="importo num">' + destra + '</span><span class="freccia"></span></button>';
+}
+
+
+/* ================================================================
+   3. DIPENDENTI — con le correzioni
+   ================================================================ */
+
+function elencoPersone() {
+  var lista = D.persone.filter(function (p) { return corrisponde(p.nome); });
+  if (!lista.length) return '<div class="vuoto">Nessun nome corrisponde alla ricerca.</div>';
+  return lista.map(function (p) {
+    var id = 'p' + D.persone.indexOf(p);
+    var stato = p.stato === 'inviato' ? '<span class="stato verde">ha inviato</span>'
+              : p.stato === 'in compilazione' ? '<span class="stato ambra">sta compilando</span>'
+              : p.righe.length ? '<span class="stato grigio">solo fissi</span>' : '<span class="stato grigio">nessun dato</span>';
+    var breve = [];
+    if (p.ore) breve.push(ore(p.ore) + ' segnate');
+    if (p.oreTimbrate) breve.push(num(p.oreTimbrate) + ' timbrate');
+    if (p.fissi) breve.push('fissi ' + eur(p.fissi));
+    if (p.bonifico) breve.push('bonifico ' + eur(p.bonifico));
+    if (p.segnalazioniTimbrature) breve.push('<span class="segnale">' + plurale(p.segnalazioniTimbrature, 'turno', 'turni') + ' da controllare</span>');
+    if (p.daPrezzare) breve.push('<span class="segnale">' + plurale(p.daPrezzare, 'intervento', 'interventi') + ' da prezzare</span>');
+    return '<div class="riga persona' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
+      testaRiga(id, '<span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + (breve.join(', ') || 'nessuna voce') + '</span>',
+                stato, eur(p.netto)) +
+      '<div class="aperto-qui" id="' + id + '-d"><div class="attesa">Carico…</div></div></div>';
+  }).join('');
+}
+
+/* Il dettaglio modificabile: lo chiede al foglio la prima volta che si apre. */
+function riempiPersona(id) {
+  var p = D.persone[Number(id.slice(1))];
+  if (DETT[p.nome]) { document.getElementById(id + '-d').innerHTML = dettaglioPersona(id, p, DETT[p.nome]); return; }
+  api('master.persona', { k: CHIAVE, mese: STATO.mese, nome: p.nome }).then(function (d) {
+    DETT[p.nome] = d;
+    var box = document.getElementById(id + '-d');
+    if (box) box.innerHTML = dettaglioPersona(id, p, d);
+  }).catch(function (e) {
+    var box = document.getElementById(id + '-d');
+    if (box) box.innerHTML = '<div class="errore">' + esc(e.message) + '</div>';
+  });
+}
+
+var SEZIONI = [['LAVORI', 'Lavori del mese'], ['FISSI', 'Compensi fissi'], ['SPESE', 'Spese'],
+               ['RISERVATO', 'Riservato (il dipendente non lo vede)']];
+
+function dettaglioPersona(id, p, d) {
+  var h = '<div class="blocco"><div class="conti">' +
+    '<div>Lavori<b class="num">' + eur(p.lavori) + '</b></div>' +
+    '<div>Fissi<b class="num">' + eur(p.fissi) + '</b></div>' +
+    '<div>Spese<b class="num">' + eur(p.spese) + '</b></div>' +
+    '<div>Bonifico<b class="num">' + eur(p.bonifico) + '</b></div>' +
+    (p.trattenute ? '<div>Trattenute<b class="num">' + eur(p.trattenute) + '</b></div>' : '') +
+    '<div class="netto">Da pagare<b class="num">' + eur(p.netto) + '</b></div></div></div>';
+
+  var tb = (d.timbrate && d.timbrate.perLavoro) || {};
+  SEZIONI.forEach(function (s) {
+    var voci = d.voci.map(function (v, i) { return [v, i]; }).filter(function (x) { return x[0].sezione === s[0]; });
+    if (!voci.length) return;
+    h += '<div class="blocco tabella-scorre"><h3>' + s[1] + '</h3><table><tr><th>Luogo</th><th>Voce</th>' +
+         '<th class="n">Quantità</th><th class="n">Prezzo</th><th class="n colonna-media">Importo</th><th></th></tr>';
+    voci.forEach(function (x) {
+      var v = x[0], i = x[1], rid = id + 'v' + i;
+      var aOre = String(v.unita).toLowerCase() === 'ore';
+      var t = aOre ? tb[v.commessa] : null;
+      var timb = (t !== null && t !== undefined)
+        ? '<br><span class="timb' + (Math.abs((Number(v.q) || 0) - t) > 0.01 ? ' diversa' : '') + '">timbrate ' + num(t) + '</span>' : '';
+      h += '<tr id="' + rid + '"><td>' + esc(v.commessa === '(voci generali)' ? 'Spese generali' : v.commessa) + '</td>' +
+           '<td>' + esc(v.voce) + (v.note ? '<br><span class="nota">' + esc(v.note) + '</span>' : '') + '</td>' +
+           '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.25" value="' + (v.q === '' ? '' : v.q) + '" ' +
+             'oninput="cambiataVoce(\'' + rid + '\')" aria-label="Quantità">' + timb + '</td>' +
+           '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.5" value="' + v.prezzo + '" ' +
+             'oninput="cambiataVoce(\'' + rid + '\')" aria-label="Prezzo"></td>' +
+           '<td class="n colonna-media" data-importo>' + eur((Number(v.q) || 0) * v.prezzo) + '</td>' +
+           '<td class="n"><button class="bott primo nascosto" onclick="salvaVoce(\'' + id + '\',' + i + ',\'' + rid + '\')">Salva</button></td></tr>';
+    });
+    h += '</table></div>';
+  });
+
+  /* bonifico e trattenute: sempre a portata */
+  var bon = d.voci.filter(function (v) { return v.unita === 'bonifico'; })[0];
+  var tra = d.voci.filter(function (v) { return v.unita === 'trattenuta'; })[0];
+  h += '<div class="blocco"><h3>Da togliere dalla busta</h3><div class="modulo">' +
+       '<label>Bonifico già fatto (€)<input class="cas" id="' + id + 'bon" type="number" inputmode="decimal" step="0.5" value="' + (bon ? bon.prezzo : '') + '"></label>' +
+       '<label>Trattenute (€)<input class="cas" id="' + id + 'tra" type="number" inputmode="decimal" step="0.5" value="' + (tra ? tra.prezzo : '') + '"></label>' +
+       '<div><button class="bott primo" onclick="salvaDetrazioni(\'' + id + '\')">Salva</button></div></div></div>';
+
+  /* una voce in piu' */
+  h += '<div class="blocco"><h3>Aggiungi una voce</h3><div class="modulo">' +
+       '<label>Luogo<input class="cas" id="' + id + 'nl" list="' + id + 'com" placeholder="Cerca o scrivi"></label>' +
+       '<datalist id="' + id + 'com">' + (d.commesse || []).map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
+       '<label>Voce<input class="cas" id="' + id + 'nv" placeholder="Es. Ore, Straordinario, Spese"></label>' +
+       '<label>Come si paga<select class="cas" id="' + id + 'nu"><option value="ore">a ore</option>' +
+         '<option value="importo in €">importo</option><option value="fisso">fisso</option></select></label>' +
+       '<label>Quantità<input class="cas" id="' + id + 'nq" type="number" inputmode="decimal" step="0.25" placeholder="ore, o 1"></label>' +
+       '<label>Prezzo (€)<input class="cas" id="' + id + 'np" type="number" inputmode="decimal" step="0.5"></label>' +
+       '<div><button class="bott primo" onclick="nuovaVoce(\'' + id + '\')">Aggiungi</button></div></div></div>';
+
+  if (d.note && d.note.length) h += '<div class="blocco"><h3>Note del dipendente</h3><p style="margin:0">' + esc(d.note.join(' — ')) + '</p></div>';
+  if (d.timbrate && d.timbrate.altrove && d.timbrate.altrove.length) {
+    h += '<div class="blocco"><h3>Timbrate su lavori che non sono in Commesse</h3>' +
+         d.timbrate.altrove.map(function (a) { return esc(a.lavoro) + ': ' + ore(a.ore); }).join('<br>') + '</div>';
+  }
+  return h;
+}
+
+function cambiataVoce(rid) {
+  var tr = document.getElementById(rid);
+  tr.classList.add('cambiata');
+  tr.querySelector('button').classList.remove('nascosto');
+  var c = tr.querySelectorAll('input');
+  tr.querySelector('[data-importo]').textContent = eur((parseFloat(c[0].value) || 0) * (parseFloat(c[1].value) || 0));
+}
+
+function scriviVoce(id, dati, bottone) {
+  var p = D.persone[Number(id.slice(1))];
+  if (bottone) { bottone.disabled = true; bottone.textContent = 'Salvo…'; }
+  return api('master.voce', Object.assign({ k: CHIAVE, mese: STATO.mese, nome: p.nome }, dati)).then(function (d) {
+    DETT[p.nome] = d;
+    dici('Salvato nel Registro.');
+    return rinfrescaMese();
+  }).catch(function (e) {
+    if (bottone) { bottone.disabled = false; bottone.textContent = 'Salva'; }
+    dici(e.message, true);
+  });
+}
+
+function salvaVoce(id, i, rid) {
+  var p = D.persone[Number(id.slice(1))], v = DETT[p.nome].voci[i];
+  var c = document.getElementById(rid).querySelectorAll('input');
+  scriviVoce(id, { commessa: v.commessa, voce: v.voce, unita: v.unita, q: c[0].value, prezzo: c[1].value, note: v.note },
+             document.getElementById(rid).querySelector('button'));
+}
+
+function salvaDetrazioni(id) {
+  var bon = document.getElementById(id + 'bon').value, tra = document.getElementById(id + 'tra').value;
+  scriviVoce(id, { commessa: '(bonifico)', voce: 'Bonifico', unita: 'bonifico', q: 1, prezzo: bon || 0 }).then(function () {
+    return scriviVoce(id, { commessa: '(trattenuta)', voce: 'Trattenuta', unita: 'trattenuta', q: 1, prezzo: tra || 0 });
+  });
+}
+
+function nuovaVoce(id) {
+  var g = function (x) { return document.getElementById(id + x).value.trim(); };
+  if (!g('nl') || !g('nv')) return dici('Scrivi il luogo e la voce.', true);
+  if (!(parseFloat(g('nq')) > 0)) return dici('Scrivi la quantità: le ore, oppure 1 per un importo.', true);
+  scriviVoce(id, { commessa: g('nl'), voce: g('nv'), unita: g('nu'), q: g('nq'), prezzo: g('np') || 0 });
+}
+
+
+/* ================================================================
+   4. LAVORI — con la spunta "fatturato"
+   ================================================================ */
+
+function elencoLavori() {
+  var solo = document.getElementById('solo').checked;
+  var lista = D.lavori.filter(function (l) { return corrisponde(l.luogo) && (!solo || (!l.fatturato && !l.generale)); });
+  if (!lista.length) return '<div class="vuoto">' + (solo ? 'Nessun lavoro da fatturare: tutto fatto.' : 'Nessun lavoro corrisponde alla ricerca.') + '</div>';
+  var massimo = Math.max.apply(null, D.lavori.map(function (l) { return l.totale; })) || 1;
+  return lista.map(function (l) {
+    var k = D.lavori.indexOf(l), id = 'l' + k, breve = [];
+    if (l.ore) breve.push(ore(l.ore));
+    breve.push(plurale(l.persone.length, 'persona', 'persone'));
+    if (l.spese) breve.push('spese ' + eur(l.spese));
+    if (l.generale) breve.push('non si fattura');
+    else if (l.fatturato) breve.push('<span class="verde-t">fatturato' + (l.fatturatoIl ? ' il ' + esc(l.fatturatoIl.slice(0, 10)) : '') + '</span>');
+    if (l.daPrezzare) breve.push('<span class="segnale">' + l.daPrezzare + ' da prezzare</span>');
+    return '<div class="riga lavoro' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
+      (l.generale ? '<div></div>' :
+       '<div class="spunta"><input type="checkbox" id="f' + k + '"' + (l.fatturato ? ' checked' : '') +
+       ' onchange="fattura(' + k + ', this.checked)" aria-label="Fatturato: ' + esc(l.luogo) + '">' +
+       '<label for="f' + k + '" title="Fatturato">' + SVG_SPUNTA + '</label></div>') +
+      testaRiga(id, '<span class="nome">' + esc(l.luogo) + '</span><br><span class="breve">' + breve.join(', ') + '</span>',
+                '<span class="barra-sfondo" aria-hidden="true"><span class="barra-piena" style="width:' +
+                Math.max(3, Math.round(l.totale / massimo * 100)) + '%"></span></span>', eur(l.totale)) +
+      '<div class="aperto-qui">' + dettaglioLavoro(l) + '</div></div>';
+  }).join('');
+}
+
+function dettaglioLavoro(l) {
+  var h = '<div class="blocco"><h3>Chi ci ha lavorato</h3><table><tr><th>Dipendente</th><th class="n">Ore</th><th class="n">Compenso</th></tr>';
+  l.persone.forEach(function (p) {
+    h += '<tr><td>' + esc(p.nome) + '</td><td class="n">' + (p.ore ? num(p.ore) : '') + '</td><td class="n">' + eur(p.importo) + '</td></tr>';
+  });
+  h += '<tr class="totale"><td>Totale</td><td class="n">' + (l.ore ? num(l.ore) : '') + '</td><td class="n">' + eur(l.totale) + '</td></tr></table></div>';
+  h += '<div class="blocco"><h3>Voce per voce</h3><table><tr><th>Dipendente</th><th>Voce</th><th class="n colonna-media">Quantità</th><th class="n">Importo</th></tr>';
+  l.righe.forEach(function (r) {
+    h += '<tr><td>' + esc(r.nome) + '</td><td>' + esc(r.voce) + (r.tipo === 'Spesa' ? ' (spesa)' : '') +
+         (r.nota ? '<br><span class="nota">' + esc(r.nota) + '</span>' : '') + '</td>' +
+         '<td class="n colonna-media">' + (r.tipo === 'Ore' ? ore(r.q) + ' x ' + eur(r.prezzo) : '') + '</td><td class="n">' + eur(r.importo) + '</td></tr>';
+  });
+  return h + '</table></div>';
+}
+
+/* la spunta cambia subito; se il foglio non risponde torna com'era */
+function fattura(k, valore) {
+  var l = D.lavori[k];
+  l.fatturato = valore;
+  l.fatturatoIl = valore ? new Date().toLocaleDateString('it-IT') : '';
+  D.totali.daFatturare += valore ? -1 : 1;
+  disegnaFrase(); disegnaElenco();
+  api('master.fatturato', { k: CHIAVE, mese: D.mese, luogo: l.luogo, fatturato: valore }).catch(function (e) {
+    l.fatturato = !valore;
+    D.totali.daFatturare += valore ? 1 : -1;
+    disegnaFrase(); disegnaElenco();
+    dici('Non sono riuscito a salvare la spunta: ' + e.message, true);
+  });
+}
+
+
+/* ================================================================
+   5. TIMBRATURE — turni e correzioni
+   ================================================================ */
+
+function opzioniLavori(scelto) {
+  return T.lavori.map(function (l) {
+    return '<option value="' + esc(l.codice) + '"' + (l.codice === scelto ? ' selected' : '') + '>' + esc(l.nome) + '</option>';
+  }).join('');
+}
+
+function elencoTimbrature() {
+  if (!T) return '<div class="attesa">Carico le timbrature…</div>';
+  if (!T.collegato) return '<div class="errore">Le timbrature non sono ancora collegate. Nel foglio Gestione ore: menu ' +
+                           'Gestione ore, "Collega le timbrature".</div>';
+  var solo = document.getElementById('solo').checked;
+  var lista = T.persone.filter(function (p) { return corrisponde(p.nome) && (!solo || p.segnalazioni); });
+  var h = '';
+  if (!lista.length) h += '<div class="vuoto">' + (solo ? 'Nessun turno da controllare in ' + esc(T.mese) + '.' : 'Nessuna timbratura in ' + esc(T.mese) + '.') + '</div>';
+
+  h += lista.map(function (p) {
+    var k = T.persone.indexOf(p), id = 't' + k;
+    var turni = p.turni.filter(function (t) { return !solo || t.grave; });
+    var breve = [plurale(p.turni.length, 'turno', 'turni')];
+    if (p.segnalazioni) breve.push('<span class="segnale">' + plurale(p.segnalazioni, 'da controllare', 'da controllare') + '</span>');
+    var tab = '<div class="tabella-scorre"><table><tr><th>Giorno</th><th>Cantiere</th><th class="n">Entrata</th><th class="n">Uscita</th>' +
+              '<th class="n">Ore</th><th>Segnalazioni</th><th></th></tr>';
+    turni.forEach(function (t) {
+      var j = p.turni.indexOf(t), mid = id + 'm' + j;
+      tab += '<tr' + (t.grave ? ' style="background:#FFFBE6"' : '') + '><td class="num">' + esc(t.data.slice(0, 5)) + '</td>' +
+             '<td>' + esc(t.lavoro) + (t.commessa && t.commessa !== t.lavoro ? '<br><span class="nota">' + esc(t.commessa) + '</span>' : '') + '</td>' +
+             '<td class="n">' + (t.entrata || '<span class="segnale">manca</span>') + '</td>' +
+             '<td class="n">' + (t.uscita || '<span class="segnale">manca</span>') + '</td>' +
+             '<td class="n">' + (t.ore ? num(t.ore) : '') + '</td>' +
+             '<td class="nota">' + esc(t.segnalazioni.join(', ')) + '</td>' +
+             '<td class="n"><button class="bott" onclick="moduloTurno(\'' + mid + '\',' + k + ',' + j + ')">Correggi</button> ' +
+             '<button class="bott rosso" onclick="annullaTurno(' + k + ',' + j + ')">Annulla</button></td></tr>' +
+             '<tr class="nascosto" id="' + mid + '"><td colspan="7"></td></tr>';
+    });
+    tab += '</table></div>';
+    tab += '<div class="blocco"><h3>Aggiungi un turno</h3>' + moduloNuovo(id + 'n', p.idDip) + '</div>';
+    return '<div class="riga turnista' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
+      testaRiga(id, '<span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + breve.join(', ') + '</span>', '', ore(p.ore)) +
+      '<div class="aperto-qui">' + tab + '</div></div>';
+  }).join('');
+
+  /* chi non ha timbrature questo mese */
+  var conTurni = {};
+  T.persone.forEach(function (p) { conTurni[p.idDip] = true; });
+  var senza = T.tutti.filter(function (x) { return !conTurni[x.idDip]; });
+  h += '<div class="sezione"><h2>Aggiungi un turno a qualcuno</h2><span class="spiega">anche a chi questo mese non ha timbrato</span></div>' +
+       moduloNuovo('libero', '', '<label>Dipendente<select class="cas" id="chiNuovo">' +
+       T.tutti.map(function (x) { return '<option value="' + esc(x.idDip) + '">' + esc(x.nome) + (conTurni[x.idDip] ? '' : ' (nessun turno)') + '</option>'; }).join('') +
+       '</select></label>');
+  return h;
+}
+
+function moduloNuovo(id, idDip, primo) {
+  return '<div class="modulo">' + (primo || '') +
+    '<label>Giorno<input class="cas" type="date" id="' + id + 'g"></label>' +
+    '<label>Cantiere<select class="cas" id="' + id + 'c">' + opzioniLavori('') + '</select></label>' +
+    '<label>Entrata<input class="cas" type="time" id="' + id + 'e"></label>' +
+    '<label>Uscita<input class="cas" type="time" id="' + id + 'u"></label>' +
+    '<div><button class="bott primo" onclick="nuovoTurno(\'' + id + '\',\'' + esc(idDip) + '\')">Aggiungi</button></div></div>';
+}
+
+function moduloTurno(mid, k, j) {
+  var t = T.persone[k].turni[j], tr = document.getElementById(mid);
+  tr.classList.toggle('nascosto');
+  tr.firstChild.innerHTML = '<div class="modulo">' +
+    '<label>Cantiere<select class="cas" id="' + mid + 'c">' + opzioniLavori(t.codice) + '</select></label>' +
+    '<label>Entrata<input class="cas" type="time" id="' + mid + 'e" value="' + esc(t.entrata) + '"></label>' +
+    '<label>Uscita<input class="cas" type="time" id="' + mid + 'u" value="' + esc(t.uscita) + '"></label>' +
+    '<div><button class="bott primo" onclick="correggiTurno(\'' + mid + '\',' + k + ',' + j + ')">Salva</button></div></div>';
+}
+
+function inviaTimbra(dati) {
+  return api('master.timbra', Object.assign({ k: CHIAVE, mese: STATO.mese }, dati)).then(function (t) {
+    T = t; disegnaElenco(); dici('Timbrature aggiornate.'); rinfrescaMese();
+  }).catch(function (e) { dici(e.message, true); });
+}
+
+function correggiTurno(mid, k, j) {
+  var p = T.persone[k], t = p.turni[j];
+  var e = document.getElementById(mid + 'e').value, u = document.getElementById(mid + 'u').value;
+  if (!e) return dici('Scrivi l\'ora di entrata.', true);
+  inviaTimbra({ op: 'correggi', idDip: p.idDip, righe: t.righe, codice: document.getElementById(mid + 'c').value,
+                giorno: t.giorno, entrata: e, uscita: u });
+}
+
+function annullaTurno(k, j) {
+  var p = T.persone[k], t = p.turni[j];
+  if (!confirm('Annullo il turno di ' + p.nome + ' del ' + t.data + ' (' + t.lavoro + ')?\n\n' +
+               'Resta scritto nel foglio delle timbrature come ANNULLATA, ma non conta più.')) return;
+  inviaTimbra({ op: 'annulla', righe: t.righe });
+}
+
+function nuovoTurno(id, idDip) {
+  if (!idDip) idDip = document.getElementById('chiNuovo').value;
+  var g = document.getElementById(id + 'g').value, e = document.getElementById(id + 'e').value, u = document.getElementById(id + 'u').value;
+  if (!g || !e || !u) return dici('Scrivi giorno, entrata e uscita.', true);
+  inviaTimbra({ op: 'nuovo', idDip: idDip, codice: document.getElementById(id + 'c').value, giorno: g, entrata: e, uscita: u });
+}
+
+
+/* ================================================================
+   6. DEPOSITO
+   ================================================================ */
+
+var ORDINE_STATO = { 'da ricontare': 0, 'finito': 1, 'da ordinare': 2, 'ok': 3 };
+
+function quantoResta(g) {
+  if (g.fattore > 1) return esc(quante(g.confezioni, g.acquisto)) + ' <span class="nota">(' + esc(quante(g.pezzi, g.unita)) + ')</span>';
+  return num(g.pezzi);
+}
+
+function elencoDeposito() {
+  if (!DEP) return '<div class="attesa">Carico il deposito…</div>';
+  var h = '';
+
+  /* --- quanto resta --- */
+  var gl = DEP.giacenze.filter(function (g) { return corrisponde(g.nome); }).slice()
+    .sort(function (a, b) { return (ORDINE_STATO[a.stato] - ORDINE_STATO[b.stato]) || (a.nome < b.nome ? -1 : 1); });
+  var daOrdinare = DEP.giacenze.filter(function (g) { return g.stato !== 'ok'; }).length;
+  h += '<div class="sezione"><h2>Quanto resta</h2><span class="spiega">' +
+       (daOrdinare ? '<span class="segnale">' + plurale(daOrdinare, 'prodotto da sistemare', 'prodotti da sistemare') + '</span>, ' : '') +
+       'avviso quando mancano meno di ' + DEP.giorniAvviso + ' giorni</span></div>';
+  h += '<div class="tabella-scorre"><table><tr><th>Prodotto</th><th class="n">In deposito</th><th class="n colonna-media">Si usa al mese</th>' +
+       '<th class="n">Finisce tra</th><th class="colonna-media">Stato</th><th class="n colonna-media">Scorta minima</th></tr>';
+  gl.forEach(function (g) {
+    var col = { 'ok': 'verde', 'da ordinare': 'ambra', 'finito': 'rosso', 'da ricontare': 'rosso' }[g.stato];
+    h += '<tr><td>' + esc(g.nome) + (g.stato !== 'ok' ? '<br><span class="stato solo-tel ' + col + '">' + esc(g.stato) + '</span>' : '') +
+         (g.ultimoArrivo ? '<br><span class="nota">ultimo arrivo ' + esc(g.ultimoArrivo.data) + ', ' + esc(g.ultimoArrivo.chi) + '</span>' : '') + '</td>' +
+         '<td class="n">' + quantoResta(g) + '</td>' +
+         '<td class="n colonna-media">' + (g.alMese ? (g.fattore > 1 ? esc(quante(g.alMese, g.acquisto)) : num(g.alMese)) : '') + '</td>' +
+         '<td class="n">' + (g.giorni === null || g.pezzi <= 0 ? '' : (g.giorni > 365 ? 'oltre un anno' : plurale(g.giorni, 'giorno', 'giorni'))) + '</td>' +
+         '<td class="colonna-media"><span class="stato ' + col + '">' + esc(g.stato) + '</span></td>' +
+         '<td class="n colonna-media"><input class="cas" type="number" min="0" step="0.5" value="' + (g.scorta === null ? '' : g.scorta) + '" ' +
+         'onchange="salvaScorta(\'' + q(esc(g.nome)) + '\', this.value)" aria-label="Scorta minima ' + esc(g.nome) + '"></td></tr>';
+  });
+  h += '</table></div>';
+
+  /* --- arrivi e conteggi --- */
+  h += '<div class="sezione"><h2>Arrivi e conteggi</h2><span class="spiega">le quantità sono come le compri (taniche, cartoni...)</span></div>' +
+       '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+       '<button class="bott primo" onclick="apriMovimento(\'Arrivo\')">Registra un arrivo</button>' +
+       '<button class="bott" onclick="apriMovimento(\'Conteggio\')">Fai un conteggio</button>' +
+       '<button class="bott" onclick="apriMovimento(\'Prodotto\')">Aggiungi un prodotto</button></div>' +
+       '<div id="movimento">' + (STATO.moduli.movimento ? moduloMovimento(STATO.moduli.movimento) : '') + '</div>';
+
+  /* --- chi ha preso cosa --- */
+  var periodi = [1, 3, 6, 12].map(function (m) {
+    return '<option value="' + m + '"' + (m === DEP.mesi ? ' selected' : '') + '>' + (m === 1 ? 'ultimo mese' : 'ultimi ' + m + ' mesi') + '</option>';
+  }).join('');
+  h += '<div class="sezione"><h2>Chi ha preso cosa</h2><span class="spiega"><select class="cas" style="width:auto" onchange="STATO.mesiDep=Number(this.value);caricaDeposito()">' +
+       periodi + '</select> dal ' + esc(DEP.da) + (DEP.media !== null ? ', in media ' + num(DEP.media) + ' pezzi ogni 10 ore' : '') + '</span></div>';
+  var pl = DEP.persone.filter(function (p) { return corrisponde(p.nome); });
+  if (!pl.length) h += '<div class="vuoto">Nessun prelievo nel periodo.</div>';
+  h += pl.map(function (p) {
+    var k = DEP.persone.indexOf(p), id = 'd' + k;
+    var breve = [plurale(p.volte, 'volta', 'volte')];
+    if (p.ore) breve.push(num(p.ore) + ' ore lavorate (' + esc(p.fonte) + ')');
+    if (p.ogni10 !== null) breve.push((p.tanto ? '<span class="segnale">' : '') + num(p.ogni10) + ' pezzi ogni 10 ore' + (p.tanto ? ', più della media</span>' : ''));
+    return '<div class="riga turnista' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
+      testaRiga(id, '<span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + breve.join(', ') + '</span>', '', num(p.pezzi) + ' pezzi') +
+      '<div class="aperto-qui"><table>' + p.prodotti.map(function (x) {
+        return '<tr><td>' + esc(x.nome) + '</td><td class="n">' + esc(quante(x.pezzi, x.unita)) + '</td></tr>';
+      }).join('') + '</table></div></div>';
+  }).join('');
+
+  /* --- per lavoro --- */
+  h += '<div class="sezione"><h2>Per lavoro</h2><span class="spiega">come l\'hanno indicato i dipendenti</span></div>';
+  h += DEP.lavori.filter(function (l) { return corrisponde(l.lavoro); }).map(function (l) {
+    var k = DEP.lavori.indexOf(l), id = 'w' + k;
+    return '<div class="riga turnista' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
+      testaRiga(id, '<span class="nome">' + esc(l.lavoro) + '</span><br><span class="breve">' + esc(l.persone.join(', ')) + '</span>', '', num(l.pezzi) + ' pezzi') +
+      '<div class="aperto-qui"><table>' + l.prodotti.map(function (x) {
+        return '<tr><td>' + esc(x.nome) + '</td><td class="n">' + esc(quante(x.pezzi, x.unita)) + '</td></tr>';
+      }).join('') + '</table></div></div>';
+  }).join('');
+
+  /* --- ultimi movimenti --- */
+  h += '<div class="sezione"><h2>Ultimi movimenti</h2><span class="spiega">si possono togliere quelli sbagliati</span></div>' +
+       '<div class="tabella-scorre"><table><tr><th>Data</th><th>Cosa</th><th>Chi</th><th>Prodotti</th><th></th></tr>' +
+       DEP.movimenti.filter(function (m) { return corrisponde(m.chi + ' ' + m.righe.map(function (r) { return r.prodotto; }).join(' ')); })
+         .slice(0, STATO.tuttiMovimenti ? 60 : 12).map(function (m) {
+           return '<tr><td class="num">' + esc(m.data) + '</td><td>' + esc(m.tipo) + '</td><td>' + esc(m.chi) +
+                  (m.lavoro ? '<br><span class="nota">' + esc(m.lavoro) + '</span>' : '') + '</td>' +
+                  '<td>' + m.righe.map(function (r) { return num(r.q) + ' ' + esc(r.prodotto); }).join(', ') + '</td>' +
+                  '<td class="n"><button class="bott rosso" onclick="togliMovimento(\'' + q(esc(m.id)) + '\')">Togli</button></td></tr>';
+         }).join('') + '</table></div>' +
+       (!STATO.tuttiMovimenti && DEP.movimenti.length > 12
+         ? '<button class="bott" style="margin-top:10px" onclick="STATO.tuttiMovimenti=true;disegnaElenco()">Mostra i movimenti più vecchi</button>' : '');
+  return h;
+}
+
+function apriMovimento(tipo) {
+  STATO.moduli.movimento = STATO.moduli.movimento === tipo ? null : tipo;
+  document.getElementById('movimento').innerHTML = STATO.moduli.movimento ? moduloMovimento(tipo) : '';
+}
+
+function moduloMovimento(tipo) {
+  if (tipo === 'Prodotto') {
+    return '<div class="modulo">' +
+      '<label>Nome<input class="cas" id="npNome" placeholder="Es. Guanti"></label>' +
+      '<label>Il dipendente lo prende a<input class="cas" id="npUnita" value="pezzo"></label>' +
+      '<label>Tu lo compri a (se diverso)<input class="cas" id="npAcquisto" placeholder="Es. tanica"></label>' +
+      '<label>Quanti in uno<input class="cas" id="npFattore" type="number" min="1" step="1" value="1"></label>' +
+      '<label>Scorta minima<input class="cas" id="npScorta" type="number" min="0" step="0.5"></label>' +
+      '<div><button class="bott primo" onclick="nuovoProdotto()">Aggiungi</button></div></div>';
+  }
+  var arrivo = tipo === 'Arrivo';
+  return '<div class="modulo" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">' +
+    (arrivo ? '<label>Fornitore<input class="cas" id="movChi" list="fornitori" placeholder="Es. Felice Palo"></label>' +
+              '<datalist id="fornitori">' + DEP.fornitori.map(function (f) { return '<option value="' + esc(f) + '">'; }).join('') + '</datalist>' : '') +
+    '<label>Giorno<input class="cas" type="date" id="movData" value="' + DEP.oggi + '" max="' + DEP.oggi + '"></label>' +
+    '<label>Note<input class="cas" id="movNote" placeholder="facoltative"></label></div>' +
+    '<p class="nota" style="margin:10px 0 4px">' + (arrivo ? 'Scrivi solo i prodotti arrivati.' :
+      'Scrivi solo i prodotti che hai contato: da oggi vale quel numero.') + '</p>' +
+    '<div class="modulo" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">' +
+    DEP.giacenze.map(function (g, i) {
+      return '<label>' + esc(g.nome) + ' <span class="nota">(' + esc(g.acquisto) + ')</span>' +
+             '<input class="cas" type="number" min="0" step="' + (g.fattore > 1 ? '0.1' : '1') + '" id="mov' + i + '"' +
+             (arrivo ? '' : ' placeholder="ora ' + num(g.confezioni) + '"') + '></label>';
+    }).join('') +
+    '<div><button class="bott primo" onclick="salvaMovimento(\'' + tipo + '\')">' + (arrivo ? 'Registra l\'arrivo' : 'Salva il conteggio') + '</button></div></div>';
+}
+
+function salvaMovimento(tipo) {
+  var righe = [];
+  DEP.giacenze.forEach(function (g, i) {
+    var v = document.getElementById('mov' + i).value;
+    if (v !== '') righe.push({ prodotto: g.nome, q: v });
+  });
+  if (!righe.length) return dici('Scrivi almeno una quantità.', true);
+  var chi = tipo === 'Arrivo' ? document.getElementById('movChi').value.trim() : '';
+  if (tipo === 'Arrivo' && !chi) return dici('Scrivi il fornitore.', true);
+  api('master.movimento', { k: CHIAVE, mesi: STATO.mesiDep, tipo: tipo, chi: chi, uid: codiceUnico(),
+                            data: document.getElementById('movData').value, note: document.getElementById('movNote').value, righe: righe })
+    .then(function (d) { DEP = d; STATO.moduli.movimento = null; disegnaElenco(); dici(tipo === 'Arrivo' ? 'Arrivo registrato.' : 'Conteggio salvato.'); })
+    .catch(function (e) { dici(e.message, true); });
+}
+
+function togliMovimento(id) {
+  if (!confirm('Tolgo questo movimento dal deposito?')) return;
+  api('master.togliMovimento', { k: CHIAVE, mesi: STATO.mesiDep, id: id })
+    .then(function (d) { DEP = d; disegnaElenco(); dici('Movimento tolto.'); })
+    .catch(function (e) { dici(e.message, true); });
+}
+
+function salvaScorta(nome, valore) {
+  api('master.prodotto', { k: CHIAVE, mesi: STATO.mesiDep, nome: nome, solo: 'scorta', scorta: valore })
+    .then(function (d) { DEP = d; disegnaElenco(); dici('Scorta minima di ' + nome + ' salvata.'); })
+    .catch(function (e) { dici(e.message, true); });
+}
+
+function nuovoProdotto() {
+  var g = function (x) { return document.getElementById(x).value.trim(); };
+  api('master.prodotto', { k: CHIAVE, mesi: STATO.mesiDep, nome: g('npNome'), unita: g('npUnita'), acquisto: g('npAcquisto'),
+                           fattore: g('npFattore'), scorta: g('npScorta') })
+    .then(function (d) { DEP = d; STATO.moduli.movimento = null; disegnaElenco(); dici('Prodotto aggiunto.'); })
+    .catch(function (e) { dici(e.message, true); });
+}
+
+
+/* ================================================================
+   7. LINK PERSONALI
+   ================================================================ */
+
+function elencoLink() {
+  if (!LNK) return '<div class="attesa">Carico i link…</div>';
+  var h = '<div class="sezione"><h2>Link personali</h2><span class="spiega">ognuno contiene i codici di quella persona: mandalo solo a lei</span></div>';
+  h += LNK.persone.filter(function (p) { return corrisponde(p.nome); }).map(function (p, i) {
+    var parti = [p.pagina === 'interventi' ? 'interventi' : 'ore', p.timbra ? 'timbra' : 'non timbra'];
+    if (!p.attivo) parti.unshift('non attivo');
+    var testo = 'Ciao ' + p.nome.split(' ')[0] + ', questo è il tuo link personale per l\'app della cooperativa. ' +
+                'Aprilo dal telefono e poi aggiungilo alla schermata Home: ' + p.link;
+    return '<div class="link-riga"><div><span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + esc(parti.join(', ')) +
+      (p.manca.length ? ', <span class="segnale">manca il codice ' + esc(p.manca.join(' e ')) + '</span>' : '') + '</span></div>' +
+      '<input readonly value="' + esc(p.link) + '" onclick="this.select()" aria-label="Link di ' + esc(p.nome) + '">' +
+      '<div class="azioni"><button class="bott" onclick="copia(\'' + q(esc(p.link)) + '\')">Copia</button>' +
+      '<a class="bott primo" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(testo) + '">WhatsApp</a></div></div>';
+  }).join('');
+  h += '<p class="nota" style="margin-top:16px">I codici che mancano li crea il comando "Crea i link personali" del foglio Gestione ore.</p>';
+  return h;
+}
+
+function copia(testo) {
+  var fatto = function () { dici('Link copiato.'); };
+  if (navigator.clipboard) navigator.clipboard.writeText(testo).then(fatto, function () { prompt('Copia il link:', testo); });
+  else prompt('Copia il link:', testo);
+}
+
+
+/* ================================================================
+   AVVIO
+   ================================================================ */
+
+if (!CHIAVE) {
+  document.getElementById('frase').innerHTML = '';
+  document.getElementById('elenco').innerHTML = '<div class="errore">Apri il link master che ti ha dato chi gestisce il foglio.</div>';
+} else {
+  if (location.search.indexOf('k=') < 0) history.replaceState(null, '', RADICE + 'master/?k=' + encodeURIComponent(CHIAVE));
+  manifestMaster();
+  caricaMese(null);
+}
+</script>
+</body>
+</html>

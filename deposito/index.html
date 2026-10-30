@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ECE840">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Coop SG">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" href="../icona-192.png">
+<link rel="manifest" href="../manifest.json">
+<title>Deposito</title>
+
+<!--
+  DEPOSITO — dentro l'app unica (versione 16)
+
+  Al posto del Google Form: il dipendente segna cosa ha preso dal deposito
+  e, se vuole, per quale lavoro. Il nome non si scrive: lo sa gia' dal codice.
+
+  Tre passaggi:
+  1. carica()   chiede al foglio i prodotti, i suoi lavori, i suoi ultimi prelievi
+  2. disegna()  costruisce la schermata
+  3. segna()    manda il prelievo al foglio (Deposito movimenti)
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../comune.css">
+<style>
+  .prodotto { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px;
+              padding: 10px 0; border-bottom: 1px solid var(--linea-chiara); }
+  .prodotto:last-child { border-bottom: 0; }
+  .prodotto .nomep { font-size: 16px; font-weight: 500; line-height: 1.25; }
+  .prodotto .unita { font-size: 13px; color: var(--grigio); }
+  .prodotto.preso .nomep { color: var(--inchiostro); }
+  .prodotto.preso { background: linear-gradient(90deg, #FDFBD8, transparent 70%); }
+
+  /* - quantita' + : pulsanti grandi, si usano anche con i guanti */
+  .passi { display: grid; grid-template-columns: 48px 58px 48px; align-items: center; }
+  .passi button { width: 48px; height: 48px; border: 1.5px solid var(--linea); background: var(--bianco);
+                  font-size: 26px; line-height: 1; color: var(--inchiostro); border-radius: 12px; padding: 0; }
+  .passi button.piu { background: var(--inchiostro); color: #fff; border-color: var(--inchiostro); }
+  .passi input { height: 48px; text-align: center; border: 0; background: none; font-size: 22px;
+                 font-family: "Barlow Condensed", sans-serif; font-weight: 700; padding: 0;
+                 font-variant-numeric: tabular-nums; }
+  .passi input:focus { outline: 3px solid var(--blu); border-radius: 10px; }
+
+  .riassunto { font-size: 15px; color: var(--grigio); line-height: 1.25; }
+  .riassunto b { display: block; color: var(--inchiostro); font-family: "Barlow Condensed", sans-serif;
+                 font-size: 24px; font-weight: 700; }
+  .fondo .primo { width: auto; padding: 0 26px; font-size: 23px; }
+
+  .prelievo { padding: 12px 0; border-top: 1px solid var(--linea-chiara); }
+  .prelievo:first-of-type { border-top: 0; }
+  .prelievo .quando { display: flex; justify-content: space-between; gap: 10px; font-weight: 500; }
+  .prelievo .cosa { font-size: 15px; color: var(--inchiostro-2); margin-top: 3px; }
+  .prelievo .per { font-size: 14px; color: var(--grigio); margin-top: 2px; }
+  .togli { background: none; border: 0; color: var(--rosso); font-size: 14px; padding: 0; }
+</style>
+</head>
+<body>
+
+<main class="pagina">
+  <div class="testata">
+    <a class="casa" href="../"><img src="../icona-192.png" alt="">Home</a>
+    <h1 id="nome">Deposito</h1>
+    <p>Segna il materiale che prendi</p>
+  </div>
+  <div id="messaggio"></div>
+  <div id="corpo"><p class="attesa">Carico i prodotti…</p></div>
+</main>
+
+<div class="fondo nascosto" id="barra">
+  <div class="dentro">
+    <div class="riassunto" id="riassunto"><b>Niente</b>tocca + per segnare</div>
+    <button class="primo" id="segna" onclick="segna()">Segna</button>
+  </div>
+</div>
+
+<script src="../config.js"></script>
+<script src="../comune.js"></script>
+<script>
+codiciDaIndirizzo();
+var CODICE = leggiCodice('m');   /* codice deposito, ricordato dal telefono */
+var D = null;
+var uid = codiceUnico();         /* lo stesso prelievo non si segna due volte */
+
+function carica() {
+  if (!CODICE) {
+    document.getElementById('corpo').innerHTML =
+      '<div class="avviso">Apri il link personale che ti ha mandato l\'ufficio.</div>';
+    return;
+  }
+  api('deposito.carica', { m: CODICE }).then(disegna).catch(function (e) {
+    document.getElementById('corpo').innerHTML = '<div class="avviso errore">' + esc(e.message) + '</div>' +
+      '<button class="secondo" onclick="carica()">Riprova</button>';
+  });
+}
+
+function disegna(d) {
+  D = d;
+  document.getElementById('nome').textContent = d.nome;
+  if (d.messaggio) avvisa(d.messaggio, true);
+
+  /* il modulo si disegna una volta sola: non si perde quello che si sta segnando */
+  if (!document.getElementById('prodotti')) {
+    var h = '<div class="card"><h2>Cosa hai preso</h2><div id="prodotti">';
+    d.prodotti.forEach(function (p, i) {
+      h += '<div class="prodotto" id="r' + i + '"><div><div class="nomep">' + esc(p.nome) + '</div>' +
+           '<div class="unita">in ' + esc(plur(p.unita)) + '</div></div>' +
+           '<div class="passi"><button type="button" onclick="passo(' + i + ',-1)" aria-label="Uno in meno di ' + esc(p.nome) + '">−</button>' +
+           '<input type="number" inputmode="numeric" min="0" step="1" id="q' + i + '" value="0" ' +
+           'oninput="riassumi()" aria-label="Quanti ' + esc(p.nome) + '">' +
+           '<button type="button" class="piu" onclick="passo(' + i + ',1)" aria-label="Uno in più di ' + esc(p.nome) + '">+</button></div></div>';
+    });
+    h += '</div></div>';
+
+    h += '<div class="card"><label class="campo" for="lavoro">Per quale lavoro <span class="facolt">(se lo sai)</span></label>' +
+         '<select id="lavoro"><option value="">Più lavori, o in generale</option>' +
+         d.lavori.map(function (l) { return '<option>' + esc(l) + '</option>'; }).join('') + '</select>' +
+         '<label class="campo" for="note">Note <span class="facolt">(facoltative)</span></label>' +
+         '<input type="text" id="note" placeholder="Es. per i condomini nuovi, con Antonella">' +
+         '<label class="campo" for="data">Quando</label>' +
+         '<input type="date" id="data" value="' + d.oggi + '" max="' + d.oggi + '"></div>';
+
+    h += '<div class="card"><h2>I tuoi ultimi prelievi</h2><div id="ultimi"></div></div>';
+    document.getElementById('corpo').innerHTML = h;
+    document.getElementById('barra').classList.remove('nascosto');
+  }
+  disegnaUltimi();
+  riassumi();
+}
+
+function disegnaUltimi() {
+  var box = document.getElementById('ultimi');
+  if (!D.ultimi.length) { box.innerHTML = '<p class="spiega" style="margin:0">Ancora niente.</p>'; return; }
+  box.innerHTML = D.ultimi.map(function (g) {
+    return '<div class="prelievo"><div class="quando"><span>' + esc(g.data) + '</span>' +
+      (g.annullabile ? '<button class="togli" onclick="togli(\'' + esc(g.id) + '\')">Togli</button>' : '') + '</div>' +
+      '<div class="cosa">' + g.righe.map(function (r) { return num(r.q) + ' ' + esc(r.prodotto); }).join(', ') + '</div>' +
+      (g.lavoro || g.note ? '<div class="per">' + esc([g.lavoro, g.note].filter(String).join(' — ')) + '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function quanti(i) {
+  var v = parseFloat(String(document.getElementById('q' + i).value).replace(',', '.'));
+  return v > 0 ? v : 0;
+}
+
+function passo(i, d) {
+  var el = document.getElementById('q' + i);
+  el.value = Math.max(0, quanti(i) + d);
+  riassumi();
+}
+
+function riassumi() {
+  if (!D) return;
+  var n = 0, pezzi = 0;
+  D.prodotti.forEach(function (p, i) {
+    var q = quanti(i);
+    document.getElementById('r' + i).classList.toggle('preso', q > 0);
+    if (q > 0) { n++; pezzi += q; }
+  });
+  document.getElementById('riassunto').innerHTML = n
+    ? '<b>' + plurale(n, 'prodotto', 'prodotti') + '</b>' + num(pezzi) + ' in tutto'
+    : '<b>Niente</b>tocca + per segnare';
+  document.getElementById('segna').disabled = !n;
+}
+
+function segna() {
+  var righe = [];
+  D.prodotti.forEach(function (p, i) { var q = quanti(i); if (q) righe.push({ prodotto: p.nome, q: q }); });
+  if (!righe.length) return avvisa('Segna almeno un prodotto con il +.');
+  if (!confirm('Segno che hai preso:\n\n' + righe.map(function (r) { return num(r.q) + ' ' + r.prodotto; }).join('\n') + '\n\nConfermi?')) return;
+
+  var b = document.getElementById('segna');
+  b.disabled = true; b.textContent = 'Segno…';
+  api('deposito.preleva', {
+    m: CODICE, uid: uid, righe: righe,
+    lavoro: document.getElementById('lavoro').value,
+    note: document.getElementById('note').value,
+    data: document.getElementById('data').value
+  }).then(function (r) {
+    b.textContent = 'Segna';
+    uid = codiceUnico();
+    D.prodotti.forEach(function (p, i) { document.getElementById('q' + i).value = 0; });
+    document.getElementById('note').value = '';
+    disegna(r);
+  }).catch(function (e) {
+    b.disabled = false; b.textContent = 'Segna';
+    avvisa(e.rete ? e.message + ' Riprova: se era già arrivato, non viene segnato due volte.' : e.message);
+  });
+}
+
+function togli(id) {
+  if (!confirm('Tolgo questo prelievo? Fallo solo se l\'hai segnato per sbaglio.')) return;
+  api('deposito.annulla', { m: CODICE, id: id }).then(disegna).catch(function (e) { avvisa(e.message); });
+}
+
+manifestPersonale();
+registraSW();
+carica();
+</script>
+</body>
+</html>

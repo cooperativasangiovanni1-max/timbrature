@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ECE840">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Coop SG">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" href="../icona-192.png">
+<link rel="manifest" href="../manifest.json">
+<title>Ore del mese</title>
+
+<!--
+  ORE DEL MESE — dentro l'app unica (versione 16)
+
+  E' la pagina di prima (Pagina.html), spostata su GitHub, con una cosa in piu':
+  le ore timbrate. Per ogni lavoro a ore si vede quante ore risultano dalle
+  timbrature; se la casella e' ancora vuota vengono proposte li'. Il
+  dipendente le controlla, le corregge se serve e le invia: in busta vanno
+  quelle che conferma lui.
+
+  Tre passaggi:
+  1. carica()   chiede al foglio i lavori di questa persona e le ore timbrate
+  2. disegna()  costruisce la schermata
+  3. salva()    rimanda al foglio quello che ha scritto
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../comune.css">
+<style>
+  input.casella { height: 46px; text-align: center; padding: 0 6px; font-variant-numeric: tabular-nums; }
+  input.desc { height: 40px; font-size: 15px; margin-top: 6px; text-align: left; }
+  input.auto { background: #FFFDF0; border-color: #E6DCB0; }
+  input.proposta { background: #FFF8CF; border-color: #E3CF5A; }
+
+  .riga { display: grid; gap: 8px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--linea-chiara); }
+  .riga:last-child { border-bottom: 0; }
+  .due { grid-template-columns: 1fr 70px 70px; }   /* luogo | ore | euro all'ora */
+  .uno { grid-template-columns: 1fr 104px; }       /* luogo | importo */
+  .intest { display: grid; gap: 8px; font-size: 13px; color: var(--grigio); padding-bottom: 4px; }
+  .intest span { text-align: center; }
+  .intest span:first-child { text-align: left; }
+  .luogo { font-size: 16px; line-height: 1.25; font-weight: 500; }
+  .voce { font-size: 13px; color: var(--grigio); margin-top: 2px; }
+  .calc { color: #7A6A2A; }
+  .trovato { color: var(--verde); }
+
+  /* le ore timbrate sotto il nome del lavoro */
+  .timbrate { font-size: 13px; color: var(--inchiostro-2); margin-top: 4px; display: flex;
+              flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .timbrate b { font-weight: 600; }
+  .timbrate .diversa { color: var(--ambra); }
+  .timbrate button { background: none; border: 0; color: var(--blu); font-size: 13px; padding: 0;
+                     text-decoration: underline; text-underline-offset: 2px; }
+
+  .fisso { display: flex; justify-content: space-between; font-size: 15px; padding: 6px 0; gap: 12px; }
+  .fisso span:last-child { color: var(--grigio); white-space: nowrap; }
+
+  .segnala { font-size: 14px; padding: 6px 0; border-top: 1px solid var(--linea-chiara); }
+  .segnala:first-of-type { border-top: 0; }
+  .segnala b { font-weight: 600; }
+
+  .tot { font-family: "Barlow Condensed", sans-serif; font-size: 28px; font-weight: 700; line-height: 1; }
+  .tot small { display: block; font-family: "IBM Plex Sans", sans-serif; font-size: 13px; font-weight: 400;
+               color: var(--grigio); margin-top: 3px; }
+  .fondo button { min-height: 50px; padding: 0 18px; font-size: 17px; }
+  .fondo .primo { width: auto; font-size: 22px; padding: 0 22px; }
+
+  .agg { width: 100%; min-height: 48px; border: 1.5px dashed var(--linea); background: var(--bianco);
+         color: var(--inchiostro-2); font-size: 15px; margin-top: 6px; }
+  .extra { border-bottom: 1px solid var(--linea-chiara); padding-bottom: 12px; margin-bottom: 12px; }
+  .extra select { margin-bottom: 8px; }
+  .extra .riga { border: 0; padding: 0; }
+  .extra input[type=text] { height: 46px; }
+</style>
+</head>
+<body>
+
+<main class="pagina">
+  <div class="testata">
+    <a class="casa" href="../"><img src="../icona-192.png" alt="">Home</a>
+    <h1 id="nome">Ore del mese</h1>
+    <p id="sotto">Controlla le ore e inviale</p>
+  </div>
+  <div id="messaggio"></div>
+  <div id="corpo"><p class="attesa">Carico i tuoi lavori…</p></div>
+</main>
+
+<div class="fondo nascosto" id="barra">
+  <div class="dentro">
+    <div class="tot"><span id="totale">0,00 €</span><small>totale del mese</small></div>
+    <div>
+      <button id="bozza" class="secondo">Salva</button>
+      <button id="invia" class="primo">Invia</button>
+    </div>
+  </div>
+</div>
+
+<script src="../config.js"></script>
+<script src="../comune.js"></script>
+<script>
+/* ================================================================
+   VARIABILI GENERALI
+   ================================================================ */
+
+codiciDaIndirizzo();
+var CODICE = leggiCodice('o');   /* codice ore, ricordato dal telefono */
+var D = null;                    /* dati ricevuti dal foglio */
+var nExtra = 0;                  /* quanti lavori nuovi sono stati aggiunti */
+
+/* Dice se la voce va a ore (due caselle) o a importo unico (una casella). */
+function aOre(u) {
+  u = String(u || '').toLowerCase();
+  return !(u === 'forfait' || u.indexOf('importo') === 0 || u === '€');
+}
+/* Dice se la voce e' una spesa: in quel caso serve anche la descrizione. */
+function eSpesa(voce) { return String(voce || '').toLowerCase().indexOf('spes') === 0; }
+
+/* "(voci generali)" e' un nome di servizio: al dipendente si mostra cosi'. */
+function nomeLuogo(c) { return c === '(voci generali)' ? 'Spese generali' : c; }
+
+/* Ore timbrate su un lavoro, se ci sono. */
+function timbrateSu(commessa) {
+  return (D && D.timbrate && D.timbrate.perLavoro && D.timbrate.perLavoro[commessa]) || 0;
+}
+
+
+/* ================================================================
+   1. CARICAMENTO
+   ================================================================ */
+
+function carica(mese) {
+  var c = document.getElementById('corpo');
+  c.innerHTML = '<p class="attesa">Carico i tuoi lavori…</p>';
+  document.getElementById('barra').classList.add('nascosto');
+  if (!CODICE) {
+    c.innerHTML = '<div class="avviso">Apri il link personale che ti ha mandato l\'ufficio.</div>';
+    return;
+  }
+  api('ore.carica', { o: CODICE, mese: mese }).then(disegna).catch(function (e) {
+    c.innerHTML = '<div class="avviso errore">' + esc(e.message) + '</div>' +
+                  '<button class="secondo" onclick="carica(null)">Riprova</button>';
+  });
+}
+
+
+/* ================================================================
+   2. DISEGNO DELLA SCHERMATA
+   ================================================================ */
+
+function disegna(d) {
+  var c = document.getElementById('corpo');
+  D = d;
+  nExtra = 0;
+
+  document.getElementById('nome').textContent = d.nome;
+  document.getElementById('sotto').textContent = 'Controlla le ore e inviale';
+
+  /* --- scelta del mese --- */
+  var h = '<div class="card"><label class="campo" for="mese">Mese</label><select id="mese">';
+  d.mesi.forEach(function (m) {
+    h += '<option' + (m === d.mese ? ' selected' : '') + '>' + esc(m) + '</option>';
+  });
+  h += '</select></div>';
+
+  if (d.gruppo) {
+    h += '<div class="avviso">Le ore che inserisci valgono anche per ' + esc(d.gruppo) +
+         '. Ognuna viene pagata con la propria tariffa.</div>';
+  }
+  if (d.stato === 'Inviato' || d.stato === 'Corretto') {
+    h += '<div class="avviso ok">Questo mese risulta già inviato. Puoi ancora correggerlo.</div>';
+  }
+
+  /* --- quello che dicono le timbrature --- */
+  h += riquadroTimbrature(d);
+
+  /* --- compensi fissi: solo da leggere --- */
+  if (d.fissi.length) {
+    h += '<div class="card"><h2>Compensi fissi</h2><p class="spiega">Già conteggiati, non devi scrivere niente.</p>';
+    d.fissi.forEach(function (f) {
+      h += '<div class="fisso"><span>' + esc(nomeLuogo(f.commessa)) + '</span><span class="num">' + eur(f.importo) + '</span></div>';
+    });
+    h += '</div>';
+  }
+
+  /* --- divido le voci in tre gruppi --- */
+  var ore = [], imp = [], spe = [];
+  d.righe.forEach(function (r, i) {
+    if (eSpesa(r.voce)) spe.push([r, i]);
+    else if (aOre(r.unita)) ore.push([r, i]);
+    else imp.push([r, i]);
+  });
+
+  /* --- LAVORI A ORE: qui entrano le ore timbrate --- */
+  if (ore.length) {
+    h += '<div class="card"><h2>Lavori a ore</h2>' +
+         '<div class="intest due"><span>Luogo di lavoro</span><span>Ore</span><span>€/ora</span></div>';
+    var giaProposte = {};
+    ore.forEach(function (x) {
+      var r = x[0], i = x[1], et = esc(r.voce);
+      if (r.autoTipo) {
+        et += ' — <span class="calc">' + r.auto + ' ' + esc(r.autoTipo.replace('giorni ', '')) +
+              ' nel mese, correggi se hai fatto ferie</span>';
+      }
+      if (r.soloDi) et += ' — solo ' + esc(r.soloDi);
+
+      /* le ore timbrate si propongono una volta sola per lavoro, sulla prima voce a ore */
+      var tb = giaProposte[r.commessa] ? 0 : timbrateSu(r.commessa);
+      if (tb) giaProposte[r.commessa] = true;
+      var valore = r.quantita === '' ? '' : r.quantita, classe = r.autoTipo ? 'auto' : '';
+      if (valore === '' && tb) { valore = tb; classe = 'proposta'; }
+
+      h += '<div class="riga due"><div><div class="luogo">' + esc(r.commessa) + '</div>' +
+           '<div class="voce">' + et + '</div>' +
+           (tb ? '<div class="timbrate" id="tb' + i + '"></div>' : '') + '</div>' +
+           '<input class="casella ' + classe + '" type="number" inputmode="decimal" min="0" step="0.5" id="q' + i +
+           '" value="' + valore + '" data-timbrate="' + tb + '" oninput="cambiato(' + i + ')" aria-label="Ore ' + esc(r.commessa) + '">' +
+           '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="t' + i +
+           '" value="' + r.tariffa + '" oninput="conta()" aria-label="Euro all\'ora ' + esc(r.commessa) + '"></div>';
+    });
+    h += '</div>';
+  }
+
+  /* --- LAVORI A IMPORTO: una sola casella --- */
+  if (imp.length) {
+    h += '<div class="card"><h2>Lavori a importo</h2>' +
+         '<div class="intest uno"><span>Luogo di lavoro</span><span>Importo €</span></div>';
+    imp.forEach(function (x) {
+      var r = x[0], i = x[1], et = esc(r.voce);
+      if (r.soloDi) et += ' — solo ' + esc(r.soloDi);
+      h += '<div class="riga uno"><div><div class="luogo">' + esc(r.commessa) + '</div>' +
+           '<div class="voce">' + et + '</div></div>' +
+           '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="v' + i +
+           '" value="' + (r.valore === '' ? '' : r.valore) + '" oninput="conta()" aria-label="Importo ' + esc(r.commessa) + '"></div>';
+    });
+    h += '</div>';
+  }
+
+  /* --- SPESE: importo piu' descrizione di cosa e' stato comprato --- */
+  if (spe.length) {
+    h += '<div class="card"><h2>Spese sostenute</h2>' +
+         '<div class="intest uno"><span>Dove, e cosa hai comprato</span><span>Importo €</span></div>';
+    spe.forEach(function (x) {
+      var r = x[0], i = x[1];
+      h += '<div class="riga uno"><div><div class="luogo">' + esc(nomeLuogo(r.commessa)) + '</div>' +
+           '<input type="text" class="desc" id="n' + i + '" placeholder="Cif e guanti" ' +
+           'value="' + esc(r.note) + '" aria-label="Cosa hai comprato"></div>' +
+           '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="v' + i +
+           '" value="' + (r.valore === '' ? '' : r.valore) + '" oninput="conta()" aria-label="Importo spesa"></div>';
+    });
+    h += '</div>';
+  }
+
+  /* --- elenco nascosto per la ricerca dei lavori --- */
+  h += '<datalist id="elencoLavori">';
+  (d.commesse || []).forEach(function (n) { h += '<option value="' + esc(n) + '">'; });
+  h += '</datalist>';
+
+  h += '<div class="card"><h2>Lavori nuovi di questo mese</h2>' +
+       '<div id="extra"></div>' +
+       '<button class="agg" onclick="aggiungi()">+ Aggiungi un lavoro</button></div>';
+
+  h += '<div class="card"><label class="campo" for="nota">Note <span class="facolt">(facoltative)</span></label>' +
+       '<textarea id="nota" placeholder="Qualcosa da segnalare su questo mese">' + esc(d.nota) + '</textarea></div>';
+
+  c.innerHTML = h;
+  document.getElementById('mese').onchange = function () { carica(this.value); };
+  document.getElementById('barra').classList.remove('nascosto');
+
+  (d.extra || []).forEach(function (e) { aggiungi(e); });
+  d.righe.forEach(function (r, i) { if (document.getElementById('tb' + i)) scriviTimbrate(i); });
+  conta();
+}
+
+/* Riquadro con le segnalazioni delle timbrature e i lavori fuori elenco. */
+function riquadroTimbrature(d) {
+  var t = d.timbrate;
+  if (!t) return '';
+  var h = '';
+  var segn = (t.segnalazioni || []).filter(function (s) { return s.testo !== 'in corso'; });
+  if (segn.length || (t.altrove || []).length) {
+    h += '<div class="card"><h2>Dalle tue timbrature</h2>';
+    if (segn.length) {
+      h += '<p class="spiega">Queste timbrature non tornano: le ore di quei giorni possono mancare. ' +
+           'Correggi tu le ore qui sotto, o avvisa l\'ufficio.</p>';
+      segn.slice(0, 12).forEach(function (s) {
+        h += '<div class="segnala"><b>' + esc(s.data.slice(0, 5)) + '</b> ' + esc(s.lavoro) + ' — ' + esc(s.testo) + '</div>';
+      });
+    }
+    (t.altrove || []).forEach(function (a, i) {
+      h += '<div class="segnala">Hai timbrato <b>' + num(a.ore) + ' ore</b> su <b>' + esc(a.lavoro) +
+           '</b>, che non è tra i tuoi lavori. <button class="leggero" onclick="aggiungiAltrove(' + i + ')">Aggiungilo</button></div>';
+    });
+    h += '</div>';
+  }
+  return h;
+}
+
+/* Sotto il lavoro: "Timbrate 7,5 ore" e, se la casella dice altro, "usa queste". */
+function scriviTimbrate(i) {
+  var box = document.getElementById('tb' + i), q = document.getElementById('q' + i);
+  if (!box || !q) return;
+  var tb = Number(q.getAttribute('data-timbrate')) || 0;
+  var v = parseFloat(String(q.value).replace(',', '.')) || 0;
+  var h = '<span>Timbrate: <b>' + num(tb) + ' ' + (tb === 1 ? 'ora' : 'ore') + '</b></span>';
+  if (q.classList.contains('proposta')) h += '<span class="diversa">proposte dalle timbrature: controlla</span>';
+  else if (v !== tb) h += '<span class="diversa">tu ne scrivi ' + num(v) + '</span><button onclick="usaTimbrate(' + i + ')">usa ' + num(tb) + '</button>';
+  box.innerHTML = h;
+}
+
+function usaTimbrate(i) {
+  var q = document.getElementById('q' + i);
+  q.value = q.getAttribute('data-timbrate');
+  q.classList.remove('proposta');
+  scriviTimbrate(i);
+  conta();
+}
+
+/* appena il dipendente tocca la casella, la proposta diventa sua */
+function cambiato(i) {
+  var q = document.getElementById('q' + i);
+  q.classList.remove('proposta');
+  scriviTimbrate(i);
+  conta();
+}
+
+function aggiungiAltrove(i) {
+  var a = D.timbrate.altrove[i];
+  aggiungi({ commessa: a.lavoro, unita: 'ore', quantita: a.ore, tariffa: 7 });
+  document.getElementById('extra').lastChild.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+
+/* ================================================================
+   LAVORI NUOVI
+   ================================================================ */
+
+function aggiungi(pre) {
+  var i = nExtra++;
+  var tipo = (pre && !aOre(pre.unita)) ? 'importo' : 'ore';
+
+  var div = document.createElement('div');
+  div.className = 'extra';
+  div.innerHTML =
+    '<select id="et' + i + '" onchange="cambiaTipo(' + i + ')" aria-label="Come è pagato">' +
+      '<option value="ore"' + (tipo === 'ore' ? ' selected' : '') + '>Pagato a ore</option>' +
+      '<option value="importo"' + (tipo === 'importo' ? ' selected' : '') + '>Importo da inserire</option>' +
+    '</select>' +
+    '<div class="riga due" id="er' + i + '">' +
+      '<input type="text" id="en' + i + '" list="elencoLavori" ' +
+        'placeholder="Cerca o scrivi il nome del lavoro" value="' +
+        esc(pre && pre.commessa ? pre.commessa : '') + '" oninput="controllaNome(' + i + ')" aria-label="Nome del lavoro">' +
+      '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="eq' + i + '" value="' +
+        (pre && pre.quantita ? pre.quantita : '') + '" oninput="conta()" aria-label="Quantità">' +
+      '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="ep' + i + '" value="' +
+        (pre && pre.tariffa ? pre.tariffa : 7) + '" oninput="conta()" aria-label="Euro all\'ora">' +
+    '</div>' +
+    '<div class="voce" id="eh' + i + '" style="margin-top:6px"></div>';
+
+  document.getElementById('extra').appendChild(div);
+  cambiaTipo(i);
+}
+
+/* Passa da due caselle a una sola. */
+function cambiaTipo(i) {
+  var t = document.getElementById('et' + i).value;
+  var riga = document.getElementById('er' + i);
+  var q = document.getElementById('eq' + i);
+  var p = document.getElementById('ep' + i);
+  if (t === 'importo') { riga.className = 'riga uno'; p.style.display = 'none'; q.placeholder = '€'; }
+  else { riga.className = 'riga due'; p.style.display = ''; q.placeholder = 'ore'; }
+  controllaNome(i);
+}
+
+/* Avvisa se il lavoro esiste gia' in archivio oppure e' nuovo. */
+function controllaNome(i) {
+  var n = document.getElementById('en' + i).value.trim();
+  var t = document.getElementById('et' + i).value;
+  var base = (t === 'importo') ? 'Scrivi l\'importo' : 'Scrivi le ore e la paga oraria';
+  var h = document.getElementById('eh' + i);
+  if (n && (D.commesse || []).indexOf(n) >= 0) h.innerHTML = '<span class="trovato">Lavoro trovato in archivio.</span> ' + base;
+  else if (n) h.innerHTML = 'Lavoro nuovo, da approvare. ' + base;
+  else h.textContent = base;
+  conta();
+}
+
+
+/* ================================================================
+   3. RACCOLTA E INVIO
+   ================================================================ */
+
+/* Legge le caselle compilate. Quelle vuote o a zero vengono ignorate. */
+function raccogli() {
+  var v = [];
+  D.righe.forEach(function (r, i) {
+    if (!eSpesa(r.voce) && aOre(r.unita)) {
+      var el = document.getElementById('q' + i);
+      if (!el) return;
+      var q = parseFloat(el.value);
+      if (!q) return;
+      v.push({ commessa: r.commessa, voce: r.voce, unita: r.unita, quantita: q,
+               tariffa: parseFloat(document.getElementById('t' + i).value) || 0, note: '', nuovo: false });
+    } else {
+      var e2 = document.getElementById('v' + i);
+      if (!e2) return;
+      var imp = parseFloat(e2.value);
+      if (!imp) return;
+      var nd = document.getElementById('n' + i);
+      v.push({ commessa: r.commessa, voce: r.voce, unita: r.unita, quantita: 1,
+               tariffa: imp, note: nd ? nd.value.trim() : '', nuovo: false });
+    }
+  });
+
+  for (var i = 0; i < nExtra; i++) {
+    var n = document.getElementById('en' + i);
+    if (!n || !n.value.trim()) continue;
+    var q = parseFloat(document.getElementById('eq' + i).value);
+    if (!q) continue;
+    if (document.getElementById('et' + i).value === 'importo') {
+      v.push({ commessa: n.value.trim(), voce: 'Importo', unita: 'importo in €', quantita: 1, tariffa: q, note: '', nuovo: true });
+    } else {
+      v.push({ commessa: n.value.trim(), voce: 'Ore', unita: 'ore', quantita: q,
+               tariffa: parseFloat(document.getElementById('ep' + i).value) || 0, note: '', nuovo: true });
+    }
+  }
+  return v;
+}
+
+/* Ricalcola il totale in fondo allo schermo a ogni tasto premuto. */
+function conta() {
+  if (!D) return;
+  var tot = 0;
+  D.fissi.forEach(function (f) { tot += f.importo; });
+  raccogli().forEach(function (v) { tot += v.quantita * v.tariffa; });
+  document.getElementById('totale').textContent = eur(tot);
+}
+
+/* Manda tutto al foglio. invia = false salva una bozza, true chiude il mese. */
+function salva(invia) {
+  var righe = raccogli();
+  var mese = document.getElementById('mese').value;
+
+  if (invia) {
+    var messaggio;
+    if (!righe.length) {
+      if (!D.fissi.length) {
+        alert('Non hai inserito niente per ' + mese + '. Scrivi almeno una voce, oppure avvisa direttamente.');
+        return;
+      }
+      messaggio = 'Per ' + mese + ' non hai ore né spese da dichiarare: risultano solo i compensi fissi.\n\nConfermi l\'invio?';
+    } else {
+      var proposte = document.querySelectorAll('input.proposta').length;
+      messaggio = 'Confermi l\'invio delle ore di ' + mese + '?' +
+        (proposte ? '\n\n' + (proposte === 1 ? 'Una casella è rimasta' : proposte + ' caselle sono rimaste') +
+                    ' con le ore proposte dalle timbrature: inviandole le confermi.' : '');
+    }
+    if (!confirm(messaggio)) return;
+  }
+
+  var b = document.getElementById('bozza'), s = document.getElementById('invia');
+  b.disabled = true; s.disabled = true;
+
+  api('ore.salva', { o: CODICE, mese: mese, righe: righe, invia: invia,
+                     nota: document.getElementById('nota').value })
+    .then(function (r) {
+      b.disabled = false; s.disabled = false;
+      avvisa(invia ? 'Inviato. Totale del mese: ' + eur(r.totale) : 'Salvato.', true);
+      if (invia) carica(mese);
+    })
+    .catch(function (e) {
+      b.disabled = false; s.disabled = false;
+      avvisa('Non sono riuscito a salvare: ' + e.message);
+    });
+}
+
+
+/* ================================================================
+   AVVIO
+   ================================================================ */
+
+document.getElementById('bozza').onclick = function () { salva(false); };
+document.getElementById('invia').onclick = function () { salva(true); };
+manifestPersonale();
+registraSW();
+carica(null);
+</script>
+</body>
+</html>
