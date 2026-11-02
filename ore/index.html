@@ -19,6 +19,9 @@
   timbrature; se la casella e' ancora vuota vengono proposte li'. Il
   dipendente le controlla, le corregge se serve e le invia: in busta vanno
   quelle che conferma lui.
+  Le voci corrette o aggiunte dall'ufficio (link master, Scheda) si vedono
+  con il valore dell'ufficio e la scritta "corretto dall'ufficio": non si
+  possono cambiare da qui.
 
   Tre passaggi:
   1. carica()   chiede al foglio i lavori di questa persona e le ore timbrate
@@ -35,6 +38,9 @@
   input.desc { height: 40px; font-size: 15px; margin-top: 6px; text-align: left; }
   input.auto { background: #FFFDF0; border-color: #E6DCB0; }
   input.proposta { background: #FFF8CF; border-color: #E3CF5A; }
+  /* voci corrette dall'ufficio: si vedono ma non si cambiano */
+  input.bloccata { background: transparent; border-color: transparent; color: var(--inchiostro); font-weight: 600; }
+  .ufficio { color: var(--blu); }
 
   .riga { display: grid; gap: 8px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--linea-chiara); }
   .riga:last-child { border-bottom: 0; }
@@ -122,6 +128,11 @@ function eSpesa(voce) { return String(voce || '').toLowerCase().indexOf('spes') 
 /* "(voci generali)" e' un nome di servizio: al dipendente si mostra cosi'. */
 function nomeLuogo(c) { return c === '(voci generali)' ? 'Spese generali' : c; }
 
+/* Voce corretta dall'ufficio: casella da sola lettura e una riga che lo dice. */
+var UFFICIO = ' — <span class="ufficio">corretto dall\'ufficio</span>';
+function blocco(r) { return r.corretta ? ' readonly tabindex="-1"' : ''; }
+function classeBlocco(r) { return r.corretta ? ' bloccata' : ''; }
+
 /* Ore timbrate su un lavoro, se ci sono. */
 function timbrateSu(commessa) {
   return (D && D.timbrate && D.timbrate.perLavoro && D.timbrate.perLavoro[commessa]) || 0;
@@ -206,20 +217,22 @@ function disegna(d) {
               ' nel mese, correggi se hai fatto ferie</span>';
       }
       if (r.soloDi) et += ' — solo ' + esc(r.soloDi);
+      if (r.corretta) et += UFFICIO;
 
-      /* le ore timbrate si propongono una volta sola per lavoro, sulla prima voce a ore */
-      var tb = giaProposte[r.commessa] ? 0 : timbrateSu(r.commessa);
-      if (tb) giaProposte[r.commessa] = true;
+      /* le ore timbrate si propongono una volta sola per lavoro, sulla prima voce a ore
+         (non dove l'ufficio ha gia' deciso le ore) */
+      var tb = (giaProposte[r.commessa] || r.corretta) ? 0 : timbrateSu(r.commessa);
+      if (tb || r.corretta) giaProposte[r.commessa] = true;
       var valore = r.quantita === '' ? '' : r.quantita, classe = r.autoTipo ? 'auto' : '';
       if (valore === '' && tb) { valore = tb; classe = 'proposta'; }
 
       h += '<div class="riga due"><div><div class="luogo">' + esc(r.commessa) + '</div>' +
            '<div class="voce">' + et + '</div>' +
            (tb ? '<div class="timbrate" id="tb' + i + '"></div>' : '') + '</div>' +
-           '<input class="casella ' + classe + '" type="number" inputmode="decimal" min="0" step="0.5" id="q' + i +
-           '" value="' + valore + '" data-timbrate="' + tb + '" oninput="cambiato(' + i + ')" aria-label="Ore ' + esc(r.commessa) + '">' +
-           '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="t' + i +
-           '" value="' + r.tariffa + '" oninput="conta()" aria-label="Euro all\'ora ' + esc(r.commessa) + '"></div>';
+           '<input class="casella ' + classe + classeBlocco(r) + '" type="number" inputmode="decimal" min="0" step="0.5" id="q' + i +
+           '" value="' + valore + '" data-timbrate="' + tb + '" oninput="cambiato(' + i + ')" aria-label="Ore ' + esc(r.commessa) + '"' + blocco(r) + '>' +
+           '<input class="casella' + classeBlocco(r) + '" type="number" inputmode="decimal" min="0" step="0.5" id="t' + i +
+           '" value="' + r.tariffa + '" oninput="conta()" aria-label="Euro all\'ora ' + esc(r.commessa) + '"' + blocco(r) + '></div>';
     });
     h += '</div>';
   }
@@ -231,10 +244,11 @@ function disegna(d) {
     imp.forEach(function (x) {
       var r = x[0], i = x[1], et = esc(r.voce);
       if (r.soloDi) et += ' — solo ' + esc(r.soloDi);
+      if (r.corretta) et += UFFICIO;
       h += '<div class="riga uno"><div><div class="luogo">' + esc(r.commessa) + '</div>' +
            '<div class="voce">' + et + '</div></div>' +
-           '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="v' + i +
-           '" value="' + (r.valore === '' ? '' : r.valore) + '" oninput="conta()" aria-label="Importo ' + esc(r.commessa) + '"></div>';
+           '<input class="casella' + classeBlocco(r) + '" type="number" inputmode="decimal" min="0" step="0.5" id="v' + i +
+           '" value="' + (r.valore === '' ? '' : r.valore) + '" oninput="conta()" aria-label="Importo ' + esc(r.commessa) + '"' + blocco(r) + '></div>';
     });
     h += '</div>';
   }
@@ -246,10 +260,13 @@ function disegna(d) {
     spe.forEach(function (x) {
       var r = x[0], i = x[1];
       h += '<div class="riga uno"><div><div class="luogo">' + esc(nomeLuogo(r.commessa)) + '</div>' +
-           '<input type="text" class="desc" id="n' + i + '" placeholder="Cif e guanti" ' +
-           'value="' + esc(r.note) + '" aria-label="Cosa hai comprato"></div>' +
-           '<input class="casella" type="number" inputmode="decimal" min="0" step="0.5" id="v' + i +
-           '" value="' + (r.valore === '' ? '' : r.valore) + '" oninput="conta()" aria-label="Importo spesa"></div>';
+           (r.voce !== 'Spese' ? '<div class="voce">' + esc(r.voce) + (r.corretta ? UFFICIO : '') + '</div>'
+                               : (r.corretta ? '<div class="voce">' + UFFICIO.slice(3) + '</div>' : '')) +
+           (r.corretta && !r.note ? '' :
+           '<input type="text" class="desc' + classeBlocco(r) + '" id="n' + i + '" placeholder="Cif e guanti" ' +
+           'value="' + esc(r.note) + '" aria-label="Cosa hai comprato"' + blocco(r) + '>') + '</div>' +
+           '<input class="casella' + classeBlocco(r) + '" type="number" inputmode="decimal" min="0" step="0.5" id="v' + i +
+           '" value="' + (r.valore === '' ? '' : r.valore) + '" oninput="conta()" aria-label="Importo spesa"' + blocco(r) + '></div>';
     });
     h += '</div>';
   }
