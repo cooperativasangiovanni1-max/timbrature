@@ -4,7 +4,7 @@ Una sola app per tutti, con il logo della cooperativa. Dentro ognuno trova solo 
 
 | Parte | Cosa fa | Chi la vede |
 |---|---|---|
-| **Timbra** | entrata e uscita dal cantiere, con QR e posizione | chi ha `Timbra = SI` |
+| **Timbra** | entrata e uscita dal cantiere, con QR e posizione | tutti (tranne chi ha `NO` nella colonna Timbra) |
 | **Ore del mese** | le ore timbrate sono già proposte: le controlla, le corregge e le invia | tutti |
 | **Interventi** | al posto di Ore del mese, per chi lavora a chiamata | chi ha `interventi` nella colonna Pagina |
 | **Deposito** | segna il materiale preso, e per quale lavoro | tutti |
@@ -94,7 +94,9 @@ Poi **fai un conteggio vero dello scaffale** dal link master (Deposito ▸ Fai u
 | Un dipendente nuovo | Gestione ore ▸ *Aggiungi un dipendente*. È già anche nelle timbrature, con i tre codici. Poi i suoi lavori in Assegnazioni |
 | Qualcuno che non deve timbrare | Dipendenti, colonna *Timbra* = NO, poi *Crea i link personali* |
 | Uscita dimenticata, turno da aggiungere | Link master ▸ Timbrature ▸ *Correggi* o *Aggiungi un turno* |
-| Ore o prezzi da correggere | Link master ▸ Dipendenti ▸ apri la persona ▸ cambia e *Salva* (o la Scheda, come prima) |
+| Ore o prezzi da correggere | Link master ▸ Dipendenti ▸ apri le persone ▸ cambia tutte le caselle che vuoi (restano in giallo) ▸ **Salva tutto** nella barra in basso (o la Scheda, come prima) |
+| Il dipendente vede le tue correzioni? | Sì: nella sua pagina compaiono con il tuo valore e la scritta *corretto dall'ufficio*, e lui non le può più cambiare |
+| Compensi fissi del mese | Si scrivono da soli all'inizio del mese per tutti i dipendenti attivi, anche per chi non apre mai l'app. Per togliere un fisso in un mese mettilo a **0** dal master. Se aggiungi un fisso in Assegnazioni a mese iniziato: menu *Prepara il mese* |
 | Bonifico già fatto | Link master ▸ Dipendenti ▸ *Da togliere dalla busta* (o il foglio Paghe, come prima) |
 | Arriva un ordine | Link master ▸ Deposito ▸ *Registra un arrivo* (quantità come le compri: taniche, cartoni...) |
 | Hai contato lo scaffale | Link master ▸ Deposito ▸ *Fai un conteggio* |
