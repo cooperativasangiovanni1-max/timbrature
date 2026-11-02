@@ -22,8 +22,11 @@
     Deposito     quanto resta, quando ordinare, chi ha preso cosa
     Link         i link personali da mandare su WhatsApp
 
-  Ogni correzione va subito nel foglio. Le righe corrette diventano "Corretto"
-  e l'app del dipendente non le sovrascrive piu'.
+  Nei Dipendenti si correggono quante caselle si vuole: restano in giallo e
+  si salvano tutte insieme con "Salva tutto" (una domanda al foglio per
+  persona, senza ricaricare la pagina). Le righe corrette diventano
+  "Corretto" e l'app del dipendente non le sovrascrive piu'.
+  Le altre schede (fatturato, timbrature, deposito) salvano subito.
 -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -177,6 +180,21 @@
                    box-shadow: 0 10px 30px rgba(14, 32, 56, .25); font-size: 15px; }
   #messaggio div.male { background: var(--rosso); }
 
+  /* modifiche non ancora salvate */
+  .cas.cambiata { background: #FFFBE6; border-color: #E2C766; }
+  .ripristina { background: none; border: 0; padding: 4px 0; color: var(--blu); font-size: 13px;
+                text-decoration: underline; text-underline-offset: 2px; }
+  .dasalvare { color: var(--dafare); font-weight: 600; }
+  .spiega-mod { color: var(--grigio); font-size: 14px; margin: 0 0 14px; }
+  .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--inchiostro); color: #fff;
+           padding: 12px 18px calc(12px + env(safe-area-inset-bottom)); box-shadow: 0 -8px 24px rgba(14, 32, 56, .18); }
+  .barra-dentro { max-width: 1040px; margin: 0 auto; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; }
+  .barra-testo { flex: 1 1 220px; font-size: 15px; }
+  .barra .bott { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .4); padding: 9px 16px; font-size: 15px; }
+  .barra .bott.salva { background: var(--giallo); color: var(--inchiostro); border-color: var(--giallo); font-weight: 600; }
+  body.con-barra .pagina { padding-bottom: 120px; }
+  body.con-barra #messaggio { bottom: 90px; }
+
   .sezione { margin: 26px 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .sezione h2 { font-family: "Barlow Condensed", sans-serif; font-size: 24px; font-weight: 700; margin: 0; }
   .sezione .spiega { color: var(--grigio); font-size: 14px; }
@@ -201,6 +219,11 @@
     .tabella-scorre { overflow-x: auto; }
     .link-riga { grid-template-columns: 1fr auto; }
     .link-riga input { grid-column: 1 / -1; grid-row: 2; }
+    .barra { padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+    .barra-testo { flex-basis: 100%; }
+    .barra .bott.salva { flex: 1; }
+    body.con-barra .pagina { padding-bottom: 150px; }
+    body.con-barra #messaggio { bottom: 124px; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -230,6 +253,13 @@
 
   <div id="elenco"></div>
 </main>
+<div class="barra nascosto" id="barra" role="region" aria-label="Modifiche da salvare">
+  <div class="barra-dentro">
+    <span class="barra-testo" id="barra-testo" aria-live="polite"></span>
+    <button class="bott" id="barra-annulla" onclick="annullaModifiche()">Annulla</button>
+    <button class="bott salva" id="barra-salva" onclick="salvaTutto()">Salva tutto</button>
+  </div>
+</div>
 <div id="messaggio" aria-live="polite"></div>
 
 <script src="../config.js"></script>
@@ -246,7 +276,8 @@ var T = null;                     /* le timbrature del mese */
 var DEP = null;                   /* il deposito */
 var LNK = null;                   /* i link personali */
 var DETT = {};                    /* il dettaglio delle persone aperte */
-var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {} };
+var MOD = {};                     /* modifiche non ancora salvate, persona per persona */
+var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {}, rileggi: false };
 
 var SVG_SPUNTA = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#fff" ' +
                  'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -298,14 +329,20 @@ function caricaMese(mese) {
   });
 }
 
-/* Ricarica solo i numeri del mese, senza chiudere niente (dopo una correzione). */
+/* Ricarica i numeri del mese senza chiudere niente e senza perdere le
+   modifiche non salvate. Serve solo dopo una correzione delle timbrature
+   (cambiano le ore timbrate), e si fa quando si torna a Dipendenti o Lavori. */
 function rinfrescaMese() {
+  STATO.rileggi = false;
   return api('master.mese', { k: CHIAVE, mese: STATO.mese }).then(function (d) {
-    D = d; disegnaFrase(); if (STATO.scheda === 'persone' || STATO.scheda === 'lavori') disegnaElenco();
-  }).catch(function () {});
+    D = d; DETT = {};
+    disegnaFrase();
+    if (STATO.scheda === 'persone' || STATO.scheda === 'lavori') disegnaElenco();
+  }).catch(function () { STATO.rileggi = true; });
 }
 
 function aggiornaTutto() {
+  if (!lasciaModifiche()) return;
   DEP = null; LNK = null; T = null;
   caricaMese(STATO.mese);
 }
@@ -377,7 +414,10 @@ function adattaMese() {
   p.remove();
 }
 
-function cambiaMese(m) { STATO.aperti = {}; caricaMese(m); }
+function cambiaMese(m) {
+  if (!lasciaModifiche()) { document.querySelector('.mese').value = STATO.mese; adattaMese(); return; }
+  STATO.aperti = {}; caricaMese(m);
+}
 
 function scegliScheda(s) {
   STATO.scheda = s;
@@ -393,6 +433,8 @@ function scegliScheda(s) {
   if (s === 'deposito' && !DEP) return caricaDeposito();
   if (s === 'link' && !LNK) return caricaLink();
   disegnaElenco();
+  /* dopo una correzione delle timbrature: i numeri si aggiornano adesso, in sottofondo */
+  if ((s === 'persone' || s === 'lavori') && STATO.rileggi) rinfrescaMese();
 }
 
 function disegnaElenco() {
@@ -423,6 +465,10 @@ function testaRiga(id, sinistra, centro, destra) {
 
 /* ================================================================
    3. DIPENDENTI — con le correzioni
+   Le caselle cambiate restano in giallo e si salvano tutte insieme
+   con "Salva tutto" (la barra in basso). Finche' non si salva niente
+   va nel foglio, e ridisegnare la pagina non le perde: i valori delle
+   caselle si prendono da MOD.
    ================================================================ */
 
 function elencoPersone() {
@@ -441,7 +487,8 @@ function elencoPersone() {
     if (p.segnalazioniTimbrature) breve.push('<span class="segnale">' + plurale(p.segnalazioniTimbrature, 'turno', 'turni') + ' da controllare</span>');
     if (p.daPrezzare) breve.push('<span class="segnale">' + plurale(p.daPrezzare, 'intervento', 'interventi') + ' da prezzare</span>');
     return '<div class="riga persona' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
-      testaRiga(id, '<span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + (breve.join(', ') || 'nessuna voce') + '</span>',
+      testaRiga(id, '<span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + (breve.join(', ') || 'nessuna voce') +
+                '<span class="dasalvare" id="' + id + 'x">' + testoDaSalvare(p.nome) + '</span></span>',
                 stato, eur(p.netto)) +
       '<div class="aperto-qui" id="' + id + '-d"><div class="attesa">Carico…</div></div></div>';
   }).join('');
@@ -461,17 +508,25 @@ function riempiPersona(id) {
   });
 }
 
+/* ridisegna solo il dettaglio di una persona (le altre caselle non si toccano) */
+function ridisegnaPersona(id) {
+  var p = D.persone[Number(id.slice(1))], box = document.getElementById(id + '-d');
+  if (box && DETT[p.nome]) box.innerHTML = dettaglioPersona(id, p, DETT[p.nome]);
+}
+
 var SEZIONI = [['LAVORI', 'Lavori del mese'], ['FISSI', 'Compensi fissi'], ['SPESE', 'Spese'],
                ['RISERVATO', 'Riservato (il dipendente non lo vede)']];
 
 function dettaglioPersona(id, p, d) {
+  var m = MOD[p.nome] || { voci: {}, nuove: [] };
   var h = '<div class="blocco"><div class="conti">' +
     '<div>Lavori<b class="num">' + eur(p.lavori) + '</b></div>' +
     '<div>Fissi<b class="num">' + eur(p.fissi) + '</b></div>' +
     '<div>Spese<b class="num">' + eur(p.spese) + '</b></div>' +
     '<div>Bonifico<b class="num">' + eur(p.bonifico) + '</b></div>' +
     (p.trattenute ? '<div>Trattenute<b class="num">' + eur(p.trattenute) + '</b></div>' : '') +
-    '<div class="netto">Da pagare<b class="num">' + eur(p.netto) + '</b></div></div></div>';
+    '<div class="netto">Da pagare<b class="num">' + eur(p.netto) + '</b></div></div></div>' +
+    '<p class="spiega-mod">Correggi tutte le caselle che vuoi, anche di più persone: si salvano insieme con «Salva tutto», in basso.</p>';
 
   var tb = (d.timbrate && d.timbrate.perLavoro) || {};
   SEZIONI.forEach(function (s) {
@@ -480,19 +535,20 @@ function dettaglioPersona(id, p, d) {
     h += '<div class="blocco tabella-scorre"><h3>' + s[1] + '</h3><table><tr><th>Luogo</th><th>Voce</th>' +
          '<th class="n">Quantità</th><th class="n">Prezzo</th><th class="n colonna-media">Importo</th><th></th></tr>';
     voci.forEach(function (x) {
-      var v = x[0], i = x[1], rid = id + 'v' + i;
+      var v = x[0], i = x[1], rid = id + 'v' + i, c = m.voci[chiaveVoce(v)];
+      var qv = c ? c.q : (v.q === '' ? '' : v.q), pv = c ? c.prezzo : v.prezzo;
       var aOre = String(v.unita).toLowerCase() === 'ore';
       var t = aOre ? tb[v.commessa] : null;
       var timb = (t !== null && t !== undefined)
         ? '<br><span class="timb' + (Math.abs((Number(v.q) || 0) - t) > 0.01 ? ' diversa' : '') + '">timbrate ' + num(t) + '</span>' : '';
-      h += '<tr id="' + rid + '"><td>' + esc(v.commessa === '(voci generali)' ? 'Spese generali' : v.commessa) + '</td>' +
+      h += '<tr id="' + rid + '"' + (c ? ' class="cambiata"' : '') + '><td>' + esc(v.commessa === '(voci generali)' ? 'Spese generali' : v.commessa) + '</td>' +
            '<td>' + esc(v.voce) + (v.note ? '<br><span class="nota">' + esc(v.note) + '</span>' : '') + '</td>' +
-           '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.25" value="' + (v.q === '' ? '' : v.q) + '" ' +
-             'oninput="cambiataVoce(\'' + rid + '\')" aria-label="Quantità">' + timb + '</td>' +
-           '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.5" value="' + v.prezzo + '" ' +
-             'oninput="cambiataVoce(\'' + rid + '\')" aria-label="Prezzo"></td>' +
-           '<td class="n colonna-media" data-importo>' + eur((Number(v.q) || 0) * v.prezzo) + '</td>' +
-           '<td class="n"><button class="bott primo nascosto" onclick="salvaVoce(\'' + id + '\',' + i + ',\'' + rid + '\')">Salva</button></td></tr>';
+           '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.25" value="' + esc(qv) + '" ' +
+             'oninput="cambiaVoce(\'' + id + '\',' + i + ')" aria-label="Quantità ' + esc(v.voce) + '">' + timb + '</td>' +
+           '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.5" value="' + esc(pv) + '" ' +
+             'oninput="cambiaVoce(\'' + id + '\',' + i + ')" aria-label="Prezzo ' + esc(v.voce) + '"></td>' +
+           '<td class="n colonna-media" data-importo>' + eur(numero(qv) * numero(pv)) + '</td>' +
+           '<td class="n"><button class="ripristina' + (c ? '' : ' nascosto') + '" onclick="ripristinaVoce(\'' + id + '\',' + i + ')">Ripristina</button></td></tr>';
     });
     h += '</table></div>';
   });
@@ -500,13 +556,26 @@ function dettaglioPersona(id, p, d) {
   /* bonifico e trattenute: sempre a portata */
   var bon = d.voci.filter(function (v) { return v.unita === 'bonifico'; })[0];
   var tra = d.voci.filter(function (v) { return v.unita === 'trattenuta'; })[0];
+  var vb = m.bon !== undefined ? m.bon : (bon ? bon.prezzo : '');
+  var vt = m.tra !== undefined ? m.tra : (tra ? tra.prezzo : '');
   h += '<div class="blocco"><h3>Da togliere dalla busta</h3><div class="modulo">' +
-       '<label>Bonifico già fatto (€)<input class="cas" id="' + id + 'bon" type="number" inputmode="decimal" step="0.5" value="' + (bon ? bon.prezzo : '') + '"></label>' +
-       '<label>Trattenute (€)<input class="cas" id="' + id + 'tra" type="number" inputmode="decimal" step="0.5" value="' + (tra ? tra.prezzo : '') + '"></label>' +
-       '<div><button class="bott primo" onclick="salvaDetrazioni(\'' + id + '\')">Salva</button></div></div></div>';
+       '<label>Bonifico già fatto (€)<input class="cas' + (m.bon !== undefined ? ' cambiata' : '') + '" id="' + id + 'bon" type="number" inputmode="decimal" step="0.5" value="' + esc(vb) + '" oninput="cambiaDetrazione(\'' + id + '\',\'bon\')"></label>' +
+       '<label>Trattenute (€)<input class="cas' + (m.tra !== undefined ? ' cambiata' : '') + '" id="' + id + 'tra" type="number" inputmode="decimal" step="0.5" value="' + esc(vt) + '" oninput="cambiaDetrazione(\'' + id + '\',\'tra\')"></label>' +
+       '</div></div>';
 
-  /* una voce in piu' */
-  h += '<div class="blocco"><h3>Aggiungi una voce</h3><div class="modulo">' +
+  /* le voci in piu', prima nella lista e poi nel foglio con Salva tutto */
+  h += '<div class="blocco"><h3>Aggiungi una voce</h3>';
+  if (m.nuove.length) {
+    h += '<div class="tabella-scorre"><table><tr><th>Luogo</th><th>Voce</th><th class="n">Quantità</th><th class="n">Prezzo</th><th class="n colonna-media">Importo</th><th></th></tr>' +
+      m.nuove.map(function (x, j) {
+        return '<tr class="cambiata"><td>' + esc(x.commessa === '(voci generali)' ? 'Spese generali' : x.commessa) + '</td><td>' + esc(x.voce) +
+               '<br><span class="nota">nuova, ' + esc(x.unita === 'ore' ? 'a ore' : x.unita) + '</span></td>' +
+               '<td class="n">' + num(x.q) + '</td><td class="n">' + eur(numero(x.prezzo)) + '</td>' +
+               '<td class="n colonna-media">' + eur(numero(x.q) * numero(x.prezzo)) + '</td>' +
+               '<td class="n"><button class="ripristina" onclick="togliNuova(\'' + id + '\',' + j + ')">Togli</button></td></tr>';
+      }).join('') + '</table></div>';
+  }
+  h += '<div class="modulo">' +
        '<label>Luogo<input class="cas" id="' + id + 'nl" list="' + id + 'com" placeholder="Cerca o scrivi"></label>' +
        '<datalist id="' + id + 'com">' + (d.commesse || []).map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
        '<label>Voce<input class="cas" id="' + id + 'nv" placeholder="Es. Ore, Straordinario, Spese"></label>' +
@@ -514,7 +583,7 @@ function dettaglioPersona(id, p, d) {
          '<option value="importo in €">importo</option><option value="fisso">fisso</option></select></label>' +
        '<label>Quantità<input class="cas" id="' + id + 'nq" type="number" inputmode="decimal" step="0.25" placeholder="ore, o 1"></label>' +
        '<label>Prezzo (€)<input class="cas" id="' + id + 'np" type="number" inputmode="decimal" step="0.5"></label>' +
-       '<div><button class="bott primo" onclick="nuovaVoce(\'' + id + '\')">Aggiungi</button></div></div></div>';
+       '<div><button class="bott" onclick="aggiungiVoce(\'' + id + '\')">Aggiungi alla lista</button></div></div></div>';
 
   if (d.note && d.note.length) h += '<div class="blocco"><h3>Note del dipendente</h3><p style="margin:0">' + esc(d.note.join(' — ')) + '</p></div>';
   if (d.timbrate && d.timbrate.altrove && d.timbrate.altrove.length) {
@@ -524,47 +593,183 @@ function dettaglioPersona(id, p, d) {
   return h;
 }
 
-function cambiataVoce(rid) {
-  var tr = document.getElementById(rid);
-  tr.classList.add('cambiata');
-  tr.querySelector('button').classList.remove('nascosto');
-  var c = tr.querySelectorAll('input');
-  tr.querySelector('[data-importo]').textContent = eur((parseFloat(c[0].value) || 0) * (parseFloat(c[1].value) || 0));
+
+/* ---------------- le modifiche in sospeso ----------------
+   MOD["Anna Rossi"] = {
+     voci:  { "Condominio 1|Ore": { commessa, voce, unita, q, prezzo } },   caselle cambiate
+     bon, tra:  "120"                                                     solo se cambiati
+     nuove: [ { commessa, voce, unita, q, prezzo } ]                       voci aggiunte
+   }                                                                                    */
+
+function chiaveVoce(v) { return v.commessa + '|' + v.voce; }
+function numero(x) { return parseFloat(String(x == null ? '' : x).replace(',', '.')) || 0; }
+function stessoNumero(a, b) { return Math.abs(numero(a) - numero(b)) < 0.0001; }
+
+function modDi(nome) { return MOD[nome] || (MOD[nome] = { voci: {}, nuove: [] }); }
+function quanteDi(nome) {
+  var m = MOD[nome];
+  if (!m) return 0;
+  return Object.keys(m.voci).length + (m.bon !== undefined ? 1 : 0) + (m.tra !== undefined ? 1 : 0) + m.nuove.length;
+}
+function contaModifiche() { return Object.keys(MOD).reduce(function (s, n) { return s + quanteDi(n); }, 0); }
+function pulisci(nome) { if (MOD[nome] && !quanteDi(nome)) delete MOD[nome]; }
+function testoDaSalvare(nome) { var n = quanteDi(nome); return n ? ', ' + plurale(n, 'modifica', 'modifiche') + ' da salvare' : ''; }
+
+function personaDa(id) { return D.persone[Number(id.slice(1))]; }
+
+function cambiaVoce(id, i) {
+  var p = personaDa(id), v = DETT[p.nome].voci[i], tr = document.getElementById(id + 'v' + i);
+  var c = tr.querySelectorAll('input'), qv = c[0].value, pv = c[1].value;
+  var uguale = stessoNumero(qv, v.q) && stessoNumero(pv, v.prezzo);   /* vuoto e 0 valgono uguale */
+  var m = modDi(p.nome), k = chiaveVoce(v);
+  if (uguale) delete m.voci[k];
+  else m.voci[k] = { commessa: v.commessa, voce: v.voce, unita: v.unita, q: qv, prezzo: pv };
+  tr.classList.toggle('cambiata', !uguale);
+  tr.querySelector('[data-importo]').textContent = eur(numero(qv) * numero(pv));
+  tr.querySelector('.ripristina').classList.toggle('nascosto', uguale);
+  pulisci(p.nome); aggiornaBarra();
 }
 
-function scriviVoce(id, dati, bottone) {
-  var p = D.persone[Number(id.slice(1))];
-  if (bottone) { bottone.disabled = true; bottone.textContent = 'Salvo…'; }
-  return api('master.voce', Object.assign({ k: CHIAVE, mese: STATO.mese, nome: p.nome }, dati)).then(function (d) {
-    DETT[p.nome] = d;
-    dici('Salvato nel Registro.');
-    return rinfrescaMese();
-  }).catch(function (e) {
-    if (bottone) { bottone.disabled = false; bottone.textContent = 'Salva'; }
-    dici(e.message, true);
-  });
+function ripristinaVoce(id, i) {
+  var p = personaDa(id), v = DETT[p.nome].voci[i];
+  if (MOD[p.nome]) delete MOD[p.nome].voci[chiaveVoce(v)];
+  pulisci(p.nome); ridisegnaPersona(id); aggiornaBarra();
 }
 
-function salvaVoce(id, i, rid) {
-  var p = D.persone[Number(id.slice(1))], v = DETT[p.nome].voci[i];
-  var c = document.getElementById(rid).querySelectorAll('input');
-  scriviVoce(id, { commessa: v.commessa, voce: v.voce, unita: v.unita, q: c[0].value, prezzo: c[1].value, note: v.note },
-             document.getElementById(rid).querySelector('button'));
+function cambiaDetrazione(id, quale) {
+  var p = personaDa(id), d = DETT[p.nome], casella = document.getElementById(id + quale);
+  var unita = quale === 'bon' ? 'bonifico' : 'trattenuta';
+  var prima = d.voci.filter(function (v) { return v.unita === unita; })[0];
+  var uguale = stessoNumero(casella.value, prima ? prima.prezzo : 0);
+  var m = modDi(p.nome);
+  if (uguale) delete m[quale]; else m[quale] = casella.value;
+  casella.classList.toggle('cambiata', !uguale);
+  pulisci(p.nome); aggiornaBarra();
 }
 
-function salvaDetrazioni(id) {
-  var bon = document.getElementById(id + 'bon').value, tra = document.getElementById(id + 'tra').value;
-  scriviVoce(id, { commessa: '(bonifico)', voce: 'Bonifico', unita: 'bonifico', q: 1, prezzo: bon || 0 }).then(function () {
-    return scriviVoce(id, { commessa: '(trattenuta)', voce: 'Trattenuta', unita: 'trattenuta', q: 1, prezzo: tra || 0 });
-  });
-}
-
-function nuovaVoce(id) {
+function aggiungiVoce(id) {
+  var p = personaDa(id);
   var g = function (x) { return document.getElementById(id + x).value.trim(); };
   if (!g('nl') || !g('nv')) return dici('Scrivi il luogo e la voce.', true);
-  if (!(parseFloat(g('nq')) > 0)) return dici('Scrivi la quantità: le ore, oppure 1 per un importo.', true);
-  scriviVoce(id, { commessa: g('nl'), voce: g('nv'), unita: g('nu'), q: g('nq'), prezzo: g('np') || 0 });
+  if (!(numero(g('nq')) > 0)) return dici('Scrivi la quantità: le ore, oppure 1 per un importo.', true);
+  modDi(p.nome).nuove.push({ commessa: g('nl'), voce: g('nv'), unita: g('nu'), q: g('nq'), prezzo: g('np') || '0' });
+  ridisegnaPersona(id); aggiornaBarra();
+  var primo = document.getElementById(id + 'nl');
+  if (primo) primo.focus();
 }
+
+function togliNuova(id, j) {
+  var p = personaDa(id);
+  if (MOD[p.nome]) MOD[p.nome].nuove.splice(j, 1);
+  pulisci(p.nome); ridisegnaPersona(id); aggiornaBarra();
+}
+
+/* la barra in basso, e il "N modifiche da salvare" accanto a ogni nome */
+var SALVO = false;
+function aggiornaBarra() {
+  var n = contaModifiche(), nomi = Object.keys(MOD);
+  document.getElementById('barra').classList.toggle('nascosto', !n && !SALVO);
+  document.body.classList.toggle('con-barra', !!n || SALVO);
+  if (D) D.persone.forEach(function (p, i) {
+    var x = document.getElementById('p' + i + 'x');
+    if (x) x.textContent = testoDaSalvare(p.nome);
+  });
+  document.getElementById('barra-salva').disabled = SALVO;
+  document.getElementById('barra-annulla').disabled = SALVO;
+  if (SALVO) return;
+  document.getElementById('barra-testo').innerHTML = '<b>' + plurale(n, 'modifica', 'modifiche') + '</b> da salvare' +
+    (nomi.length === 1 ? ' per ' + esc(nomi[0]) : ' per ' + nomi.length + ' persone');
+}
+
+/* Prima di cambiare mese o ricaricare: true se si puo' andare avanti. */
+function lasciaModifiche() {
+  var n = contaModifiche();
+  if (!n) return true;
+  if (!confirm('Hai ' + plurale(n, 'modifica', 'modifiche') + ' non ancora ' + (n === 1 ? 'salvata' : 'salvate') +
+               '. Se vai avanti ' + (n === 1 ? 'si perde' : 'si perdono') + '.\n\nVuoi davvero andare avanti?')) return false;
+  MOD = {}; aggiornaBarra();
+  return true;
+}
+
+function annullaModifiche() {
+  var n = contaModifiche();
+  if (n > 1 && !confirm('Annullo le ' + n + ' modifiche non salvate?')) return;
+  MOD = {}; aggiornaBarra();
+  if (STATO.scheda === 'persone') disegnaElenco();
+}
+
+/* Le voci da mandare al foglio per una persona. */
+function vociDa(m) {
+  var out = Object.keys(m.voci).map(function (k) { return m.voci[k]; });
+  if (m.bon !== undefined) out.push({ commessa: '(bonifico)', voce: 'Bonifico', unita: 'bonifico', q: 1, prezzo: m.bon || 0 });
+  if (m.tra !== undefined) out.push({ commessa: '(trattenuta)', voce: 'Trattenuta', unita: 'trattenuta', q: 1, prezzo: m.tra || 0 });
+  return out.concat(m.nuove);
+}
+
+/* Una domanda al foglio per persona, una dopo l'altra. Il foglio risponde
+   con il dettaglio e i numeri del mese gia' rifatti: non si ricarica niente. */
+function salvaTutto() {
+  if (SALVO) return;
+  var nomi = Object.keys(MOD).filter(quanteDi);
+  if (!nomi.length) return;
+  SALVO = true; aggiornaBarra();
+  var fatti = 0, errori = [], catena = Promise.resolve();
+  nomi.forEach(function (nome, j) {
+    catena = catena.then(function () {
+      var m = MOD[nome];
+      if (!m) return;
+      /* com'era al momento dell'invio: se intanto cambi qualcosa, quello resta da salvare */
+      var inviate = { voci: Object.assign({}, m.voci), bon: m.bon, tra: m.tra, nuove: m.nuove.slice() };
+      document.getElementById('barra-testo').textContent = 'Salvo' + (nomi.length > 1 ? ' ' + (j + 1) + ' di ' + nomi.length : '') + '…';
+      return api('master.voci', { k: CHIAVE, mese: STATO.mese, nome: nome, voci: vociDa(inviate) }).then(function (r) {
+        var prima = DETT[nome];
+        if (r.persona.timbrateNonLette && prima) r.persona.timbrate = prima.timbrate;
+        DETT[nome] = r.persona;
+        nuoviNumeri(r.mese);
+        togliSalvate(nome, inviate);
+        fatti++;
+      }).catch(function (e) { errori.push(nome + ': ' + e.message); });
+    });
+  });
+  catena.then(function () {
+    SALVO = false;
+    disegnaFrase();
+    if (STATO.scheda === 'persone' || STATO.scheda === 'lavori') disegnaElenco();
+    aggiornaBarra();
+    if (errori.length) dici('Non salvato. ' + errori.join(' — ') + ' Le caselle restano in giallo: riprova.', true);
+    else dici(fatti === 1 ? 'Salvato nel Registro.' : 'Salvate nel Registro le modifiche di ' + fatti + ' persone.');
+  });
+}
+
+function togliSalvate(nome, inviate) {
+  var m = MOD[nome];
+  if (!m) return;
+  Object.keys(inviate.voci).forEach(function (k) { if (m.voci[k] === inviate.voci[k]) delete m.voci[k]; });
+  if (inviate.bon !== undefined && m.bon === inviate.bon) delete m.bon;
+  if (inviate.tra !== undefined && m.tra === inviate.tra) delete m.tra;
+  m.nuove = m.nuove.filter(function (x) { return inviate.nuove.indexOf(x) < 0; });
+  pulisci(nome);
+}
+
+/* I numeri del mese arrivati con il salvataggio. Le ore timbrate non
+   cambiano salvando una voce: restano quelle che la pagina aveva gia'. */
+function nuoviNumeri(nuovo) {
+  var prima = {};
+  D.persone.forEach(function (p) { prima[p.nome] = p; });
+  nuovo.persone.forEach(function (p) {
+    var x = prima[p.nome];
+    p.oreTimbrate = x ? x.oreTimbrate : 0;
+    p.segnalazioniTimbrature = x ? x.segnalazioniTimbrature : 0;
+  });
+  nuovo.timbrature = D.timbrature;
+  D = nuovo;
+  document.getElementById('aggiornato').textContent = 'aggiornato alle ' + D.aggiornato.slice(-5);
+}
+
+/* chiudere o ricaricare la pagina con modifiche non salvate: il browser chiede conferma */
+window.addEventListener('beforeunload', function (e) {
+  if (contaModifiche() || SALVO) { e.preventDefault(); e.returnValue = ''; }
+});
 
 
 /* ================================================================
@@ -704,7 +909,8 @@ function moduloTurno(mid, k, j) {
 
 function inviaTimbra(dati) {
   return api('master.timbra', Object.assign({ k: CHIAVE, mese: STATO.mese }, dati)).then(function (t) {
-    T = t; disegnaElenco(); dici('Timbrature aggiornate.'); rinfrescaMese();
+    T = t; disegnaElenco(); dici('Timbrature aggiornate.');
+    STATO.rileggi = true;   /* le ore timbrate di Dipendenti e Lavori si rifanno quando ci torni */
   }).catch(function (e) { dici(e.message, true); });
 }
 
