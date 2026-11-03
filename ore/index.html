@@ -163,6 +163,8 @@ function carica(mese) {
    ================================================================ */
 
 function disegna(d) {
+  /* chi lavora a interventi (per esempio Enzo) ha la sua pagina: ci va da solo */
+  if (d.pagina === 'interventi') { location.replace('interventi.html' + location.search); return; }
   var c = document.getElementById('corpo');
   D = d;
   nExtra = 0;
