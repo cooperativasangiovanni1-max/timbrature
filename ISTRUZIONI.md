@@ -6,7 +6,7 @@ Una sola app per tutti, con il logo della cooperativa. Dentro ognuno trova solo 
 |---|---|---|
 | **Timbra** | entrata e uscita dal cantiere, con QR e posizione | tutti (tranne chi ha `NO` nella colonna Timbra) |
 | **Ore del mese** | le ore timbrate sono già proposte: le controlla, le corregge e le invia | tutti |
-| **Interventi** | al posto di Ore del mese, per chi lavora a chiamata | chi ha `interventi` nella colonna Pagina |
+| **Interventi** | al posto di Ore del mese, per chi lavora a chiamata | chi ha `interventi` nella colonna Pagina; Enzo Durante anche con la casella vuota |
 | **Deposito** | segna il materiale preso, e per quale lavoro | tutti |
 | **Link master** | per te e il titolare: vede e corregge tutto | solo chi ha il link master |
 
