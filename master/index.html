@@ -870,14 +870,23 @@ window.addEventListener('beforeunload', function (e) {
    3b. BONIFICI DAI CEDOLINI
    Carichi il PDF con i cedolini del mese (quello del consulente):
    la pagina lo legge QUI, sul telefono o sul computer, con pdf.js.
-   Per ogni cedolino trova la persona e il netto, e ti fa controllare
-   tutto prima di scrivere. Al foglio arrivano solo nomi e importi:
-   il PDF non viene salvato da nessuna parte.
+   Per ogni cedolino trova la persona e la RETRIBUZIONE NETTA, e ti fa
+   controllare tutto prima di scrivere. Al foglio arrivano solo nomi e
+   importi: il PDF non viene salvato da nessuna parte.
+   Casi particolari:
+   - "Bonifico fisso" nel foglio Dipendenti (per esempio 350 per chi ha
+     le detrazioni): vale quello e non il netto del cedolino;
+   - cedolino di congedo (maternita' e simili) e nessun compenso
+     nell'app: non si scrive, se no la persona risulterebbe in debito;
+   - nome scritto in un altro modo (Michela/Michelina, Gina/Luigia):
+     la riga e' proposta in giallo, da controllare.
    ================================================================ */
 
 var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
 var MESI_IT = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio',
                'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+var CODICE_FISCALE = /\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/;
+var CODICE_FISCALE_TUTTI = /\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/g;
 
 /* il lettore di PDF si scarica solo quando serve */
 function caricaPdfJs() {
@@ -895,6 +904,7 @@ function semplice(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ').trim();
 }
+function parole(s) { return semplice(s).split(' ').filter(function (w) { return w; }); }
 
 /* "1.234,56" -> 1234.56 ; null se non e' un importo */
 function importoDa(t) {
@@ -917,59 +927,121 @@ function righeDiPagina(pagina) {
     });
     righe.forEach(function (r) {
       r.pezzi.sort(function (a, b) { return a.x - b.x; });
-      r.testo = r.pezzi.map(function (p) { return p.s; }).join(' ').replace(/\s+/g, ' ');
+      var t = '';
+      r.pezzi.forEach(function (p) { if (t) t += ' '; p.da = t.length; t += p.s; });
+      r.testo = t;
+      r.parole = parole(t);
+      r.cf = CODICE_FISCALE.test(t);
     });
     return righe;
   });
 }
 
-/* Chi e' il dipendente di questa pagina: tutte le parole del suo nome sulla stessa riga. */
-function nomeDiPagina(righe) {
-  var meglio = null;
-  D.persone.forEach(function (p) {
-    var parole = semplice(p.nome).split(' ').filter(function (x) { return x.length > 1; });
-    if (!parole.length) return;
-    for (var i = 0; i < righe.length; i++) {
-      var qui = ' ' + semplice(righe[i].testo) + ' ';
-      if (parole.every(function (w) { return qui.indexOf(' ' + w + ' ') >= 0; })) {
-        if (!meglio || parole.length > meglio.parole || (parole.length === meglio.parole && i < meglio.riga)) {
-          meglio = { nome: p.nome, parole: parole.length, riga: i, letto: righe[i].testo.trim() };
-        }
-        break;
-      }
-    }
-  });
-  return meglio;
+/* ---- chi e' la persona del cedolino ---- */
+
+function distanza(a, b) {
+  var d = [];
+  for (var i = 0; i <= a.length; i++) { d[i] = [i]; }
+  for (var j = 0; j <= b.length; j++) d[0][j] = j;
+  for (i = 1; i <= a.length; i++) for (j = 1; j <= b.length; j++) {
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  }
+  return d[a.length][b.length];
+}
+/* michela ~ michelina, samatha ~ samantha */
+function simili(a, b) {
+  if (a === b) return true;
+  if (a.length < 4 || b.length < 4) return false;
+  var p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  return p >= 5 || distanza(a, b) <= (Math.min(a.length, b.length) >= 6 ? 2 : 1);
 }
 
-/* Il netto del cedolino: l'importo accanto (o sotto) a "Netto in busta", "Netto del mese"... */
-var NETTO_BUONO = /netto\s*(in\s*busta|del\s*mese|a\s*pagare|da\s*pagare|busta|pagato|corrisposto|mese|retribuzione)/i;
-var NETTO_SOLO = /(^|[^a-z])netto([^a-z]|$)/i;
+/* Quanto bene una riga contiene il nome:
+   3 = tutto uguale (anche "ANNA VERA" per Annavera), 2 = simile, 1 = solo il cognome. */
+function livelloNome(nome, r) {
+  var t = parole(nome).filter(function (w) { return w.length > 1; });
+  if (!t.length) return 0;
+  var W = r.parole;
+  if (t.every(function (w) { return W.indexOf(w) >= 0; })) return 3;
+  /* nome attaccato o staccato in modo diverso */
+  var giri = [];
+  for (var i = 0; i < t.length; i++) giri.push(t.slice(i).concat(t.slice(0, i)).join(''));
+  for (var a = 0; a < W.length; a++) {
+    var s = '';
+    for (var b = a; b < W.length && b < a + t.length + 2; b++) {
+      s += W[b];
+      if (giri.indexOf(s) >= 0) return 3;
+    }
+  }
+  if (!r.cf) return 0;                               /* i confronti larghi solo sulla riga del nome */
+  var esatte = t.filter(function (w) { return W.indexOf(w) >= 0; }).length;
+  if (esatte && t.every(function (w) { return W.some(function (x) { return simili(w, x); }); })) return 2;
+  var cognome = t[t.length - 1];
+  if (cognome.length >= 4 && W.indexOf(cognome) >= 0) return 1;
+  return 0;
+}
+
+function nomeDiPagina(righe, persone) {
+  var cand = [];
+  persone.forEach(function (nome) {
+    var meglio = null;
+    righe.forEach(function (r, i) {
+      var l = livelloNome(nome, r);
+      if (l && (!meglio || l > meglio.livello)) meglio = { nome: nome, livello: l, riga: i };
+    });
+    if (meglio) cand.push(meglio);
+  });
+  if (!cand.length) return null;
+  var top = Math.max.apply(null, cand.map(function (c) { return c.livello; }));
+  var primi = cand.filter(function (c) { return c.livello === top; });
+  if (primi.length > 1) {
+    /* a parita': il nome con piu' parole (Maria Grazia Sica batte Sica) */
+    var lung = function (c) { return parole(c.nome).length; };
+    var max = Math.max.apply(null, primi.map(lung));
+    primi = primi.filter(function (c) { return lung(c) === max; });
+  }
+  if (primi.length !== 1) return null;              /* due persone possibili: decidi tu */
+  /* solo il cognome: vale se nessun altro dipendente ha lo stesso cognome */
+  if (top === 1) {
+    var cogn = parole(primi[0].nome).pop();
+    if (persone.filter(function (n) { return parole(n).pop() === cogn; }).length > 1) return null;
+  }
+  var letto = righe[primi[0].riga].testo.replace(CODICE_FISCALE_TUTTI, '').replace(/\s+/g, ' ').trim();
+  return { nome: primi[0].nome, livello: top, letto: letto };
+}
+
+/* ---- il netto ---- */
+
+var NETTO_BUONO = /retribuzione\s+netta|netto\s*(?:in\s*busta|del\s*mese|a\s*pagare|da\s*pagare|busta|pagato|corrisposto)/i;
+var NETTO_SOLO = /\bnett[oa]\b/i;
+
+function pezzoA(r, i) {
+  var q = r.pezzi[0];
+  r.pezzi.forEach(function (p) { if (p.da <= i) q = p; });
+  return q;
+}
 
 function nettoDiPagina(righe) {
   var trovato = null;
   [NETTO_BUONO, NETTO_SOLO].some(function (re) {
     righe.forEach(function (r, i) {
-      if (!re.test(r.testo)) return;
-      if (re === NETTO_SOLO && /imponib|irpef|lordo|contribut/i.test(r.testo)) return;
-      /* il pezzo con l'etichetta, per sapere dove sta */
-      var et = r.pezzi.filter(function (p) { return /netto/i.test(p.s); })[0] || r.pezzi[0];
-      /* 1. sulla stessa riga, dopo l'etichetta */
-      var dopo = r.testo.slice(r.testo.search(re));
-      var v = importoDa(dopo.replace(/^\D*?netto\s*(in\s*busta|del\s*mese|a\s*pagare|da\s*pagare|busta|pagato|corrisposto|mese|retribuzione)?/i, ''));
+      var m = r.testo.match(re);
+      if (!m) return;
+      if (re === NETTO_SOLO && /imponib|irpef|lordo|contribut|accant|tfr/i.test(r.testo)) return;
+      var inizio = m.index, fine = m.index + m[0].length;
+      var pa = pezzoA(r, inizio), pb = pezzoA(r, fine - 1);
+      var sx = pa.x, dx = pb.x + pb.w;
+      /* 1. sulla stessa riga, subito dopo l'etichetta */
+      var v = importoDa(r.testo.slice(fine).split(/[a-z]{4,}/i)[0]);
       /* 2. altrimenti sotto, nella stessa colonna */
       if (v === null) {
-        var cx = et.x + et.w / 2, migliore = null;
-        for (var j = i + 1; j < righe.length && righe[i].y - righe[j].y < 70; j++) {
+        for (var j = i + 1; j < righe.length && r.y - righe[j].y < 70 && v === null; j++) {
           righe[j].pezzi.forEach(function (p) {
             var n = importoDa(p.s);
-            if (n === null) return;
-            var d = Math.abs(p.x + p.w / 2 - cx);
-            if (d < 90 && (!migliore || d < migliore.d)) migliore = { v: n, d: d };
+            if (n !== null && v === null && p.x < dx + 30 && p.x + p.w > sx - 30) v = n;
           });
-          if (migliore) break;
         }
-        if (migliore) v = migliore.v;
       }
       if (v !== null) trovato = v;      /* vale l'ultimo della pagina: il netto sta in fondo */
     });
@@ -978,13 +1050,21 @@ function nettoDiPagina(righe) {
   return trovato;
 }
 
-var CODICE_FISCALE = /\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/;
+/* un cedolino di congedo (maternita' e simili): retribuzione a ore a zero, paga l'INPS */
+function congedoDi(testo) {
+  if (/mat\.?\s*pat|maternit/i.test(testo)) return 'maternità';
+  if (/congedo\s*a\s*42|art\.?\s*42/i.test(testo)) return 'congedo art. 42';
+  if (/congedo\s*parentale/i.test(testo)) return 'congedo parentale';
+  return /congedo/i.test(testo) ? 'congedo' : '';
+}
+
+/* ---- dal PDF alla tabella ---- */
 
 function apriCedolini(input) {
   var f = input.files && input.files[0];
   input.value = '';
   if (!f) return;
-  STATO.ced = { file: f.name, stato: 'leggo', righe: [], pagine: 0, mesePdf: '', avviso: '' };
+  STATO.ced = { file: f.name, stato: 'leggo', righe: [], pagine: 0, mesePdf: '' };
   disegnaElenco();
   var lettore = new FileReader();
   lettore.onload = function () { leggiCedolini(new Uint8Array(lettore.result)); };
@@ -998,18 +1078,27 @@ function erroreCed(testo) {
   if (STATO.scheda === 'persone') disegnaElenco();
 }
 
+/* tutti i dipendenti del foglio (anche chi non ha ancora niente nel mese), con il bonifico fisso */
+function anagraficaCed() {
+  if (LNK) return Promise.resolve(LNK);
+  return api('master.persone', { k: CHIAVE }).then(function (d) { LNK = d; return d; })
+    .catch(function () { return { persone: D.persone.map(function (p) { return { nome: p.nome }; }) }; });
+}
+
 function leggiCedolini(dati) {
-  caricaPdfJs().then(function (pdfjs) {
-    return pdfjs.getDocument({ data: dati }).promise;
+  var anag;
+  Promise.all([caricaPdfJs(), anagraficaCed()]).then(function (x) {
+    anag = x[1].persone;
+    return x[0].getDocument({ data: dati }).promise;
   }).then(function (pdf) {
-    var lette = [];
-    var catena = Promise.resolve();
+    var nomi = anag.map(function (p) { return p.nome; });
+    var lette = [], catena = Promise.resolve();
     for (var n = 1; n <= pdf.numPages; n++) (function (n) {
       catena = catena.then(function () { return pdf.getPage(n); }).then(righeDiPagina).then(function (righe) {
         var tutto = righe.map(function (r) { return r.testo; }).join('\n');
         var cf = tutto.match(CODICE_FISCALE);
-        lette.push({ n: n, righe: righe, testo: tutto, nome: nomeDiPagina(righe),
-                     netto: nettoDiPagina(righe), cf: cf ? cf[0] : '' });
+        lette.push({ n: n, righe: righe, testo: tutto, nome: nomeDiPagina(righe, nomi),
+                     netto: nettoDiPagina(righe), cf: cf ? cf[0] : '', congedo: congedoDi(tutto) });
       });
     })(n);
     return catena.then(function () { return { pdf: pdf, lette: lette }; });
@@ -1021,8 +1110,8 @@ function leggiCedolini(dati) {
       return erroreCed('Nel PDF non c\'è testo da leggere: sembra una scansione. ' +
                        'I bonifici vanno scritti a mano, oppure chiedi al consulente il PDF originale.');
     }
-    c.righe = raggruppaCedolini(r.lette);
-    /* di che mese e' il PDF */
+    c.righe = raggruppaCedolini(r.lette, anag);
+    c.nomi = anag.map(function (p) { return p.nome; });
     var conta = {};
     r.lette.forEach(function (p) {
       var re = new RegExp('(' + MESI_IT.join('|') + ')\\s+(20\\d\\d)', 'gi'), m;
@@ -1036,17 +1125,17 @@ function leggiCedolini(dati) {
   });
 }
 
-/* Pagine -> una riga per persona. Una pagina senza nome e senza codice fiscale
-   nuovo e' il seguito del cedolino prima (cedolini di due pagine). */
-function raggruppaCedolini(lette) {
-  var righe = [], ultimo = null;
+/* Pagine -> una riga per persona. Una pagina senza nome e senza un codice
+   fiscale nuovo e' il seguito del cedolino prima (cedolini di due pagine). */
+function raggruppaCedolini(lette, anag) {
+  var gruppi = [], ultimo = null;
   lette.forEach(function (p) {
     if (p.nome) {
-      /* la stessa persona piu' avanti (per esempio la tredicesima a parte) va nella stessa riga */
-      var g = righe.filter(function (x) { return x.nome === p.nome.nome; })[0];
-      if (!g) { g = { nome: p.nome.nome, pagine: [], netti: [], letto: p.nome.letto, cf: p.cf }; righe.push(g); }
+      var g = gruppi.filter(function (x) { return x.nome === p.nome.nome; })[0];
+      if (!g) { g = { nome: p.nome.nome, livello: p.nome.livello, pagine: [], netti: [], letto: p.nome.letto, cf: p.cf, congedo: '' }; gruppi.push(g); }
       g.pagine.push(p.n);
       if (p.netto !== null) g.netti.push(p.netto);
+      if (p.congedo) g.congedo = p.congedo;
       ultimo = g;
       return;
     }
@@ -1054,19 +1143,44 @@ function raggruppaCedolini(lette) {
     if (seguito) {
       ultimo.pagine.push(p.n);
       if (p.netto !== null) ultimo.netti.push(p.netto);
+      if (p.congedo) ultimo.congedo = p.congedo;
       return;
     }
     /* nessun dipendente riconosciuto: si assegna a mano, o si lascia */
-    var riga = p.righe.filter(function (r) { return CODICE_FISCALE.test(r.testo); })[0] ||
-               p.righe.filter(function (r) { return /cognome|nominativo|dipendente/i.test(r.testo); })[0];
-    righe.push({ nome: '', pagine: [p.n], netti: p.netto !== null ? [p.netto] : [], cf: p.cf,
-                 letto: riga ? riga.testo.trim().slice(0, 60) : (p.cf ? 'cod. fisc. ' + p.cf : 'nessun nome riconosciuto') });
+    var riga = p.righe.filter(function (r) { return r.cf; })[0];
+    gruppi.push({ nome: '', livello: 0, pagine: [p.n], netti: p.netto !== null ? [p.netto] : [], cf: p.cf, congedo: p.congedo,
+                  letto: riga ? riga.testo.replace(CODICE_FISCALE_TUTTI, '').replace(/\s+/g, ' ').trim().slice(0, 60) : 'nessun nome riconosciuto' });
     ultimo = null;
   });
-  return righe.map(function (g) {
-    var somma = g.netti.reduce(function (s, x) { return s + x; }, 0);
-    return { nome: g.nome, pagine: g.pagine, letto: g.letto, sommati: g.netti.length,
-             netto: g.netti.length ? Math.round(somma * 100) / 100 : '' };
+
+  var fissi = {};
+  anag.forEach(function (a) { if (a.bonificoFisso) fissi[a.nome] = a.bonificoFisso; });
+  return gruppi.map(function (g) {
+    var somma = Math.round(g.netti.reduce(function (s, x) { return s + x; }, 0) * 100) / 100;
+    var r = { nome: g.nome, pagine: g.pagine, letto: g.letto, note: [], giallo: false,
+              cedolino: g.netti.length ? somma : null, netto: g.netti.length ? somma : '' };
+    if (g.netti.length > 1) r.note.push(g.netti.length + ' cedolini, sommati');
+    if (g.livello === 2) { r.note.push('nome scritto in modo diverso: controlla'); r.giallo = true; }
+    if (g.livello === 1) { r.note.push('coincide solo il cognome: controlla'); r.giallo = true; }
+    if (g.nome && fissi[g.nome]) {
+      r.netto = fissi[g.nome];
+      r.note.push('bonifico fisso ' + eur(fissi[g.nome]) + (r.cedolino !== null ? ' (nel cedolino ' + eur(r.cedolino) + ')' : ''));
+    }
+    if (g.congedo) {
+      var p = D.persone.filter(function (x) { return x.nome === g.nome; })[0];
+      var nellApp = p ? p.totale : 0;
+      if (g.nome && !nellApp) {
+        r.note.push('in ' + g.congedo + ' e senza compensi nell\'app: non lo scrivo, se no risulterebbe in debito. ' +
+                    'Se vuoi scriverlo lo stesso, scegli il nome');
+        r.proposto = g.nome; r.nome = ''; r.giallo = true;
+      } else if (g.nome) {
+        r.note.push('in ' + g.congedo + ', ma nell\'app ha ' + eur(nellApp) + ' di compensi: controlla');
+        r.giallo = true;
+      }
+    }
+    if (r.netto === '') r.note.push('netto non trovato: scrivilo tu');
+    if (!g.nome && !r.proposto) r.giallo = true;
+    return r;
   });
 }
 
@@ -1082,7 +1196,7 @@ function pannelloCedolini() {
   if (!c) {
     return '<div class="ced-avvio"><label class="bott"><input type="file" accept="application/pdf,.pdf" ' +
            'onchange="apriCedolini(this)" hidden>Bonifici dal PDF dei cedolini</label>' +
-           '<span class="nota">legge il netto di ognuno e lo scrive come bonifico di ' + esc(STATO.mese) + '</span></div>';
+           '<span class="nota">legge la retribuzione netta di ognuno e la scrive come bonifico di ' + esc(STATO.mese) + '</span></div>';
   }
   var h = '<div class="ced"><div class="ced-testa"><h3>Bonifici dai cedolini, ' + esc(STATO.mese) + '</h3>' +
           '<button class="bott" onclick="chiudiCedolini()">Chiudi</button></div>';
@@ -1090,28 +1204,28 @@ function pannelloCedolini() {
   if (c.stato === 'errore') return h + '<div class="errore">' + esc(c.errore) + '</div></div>';
 
   h += '<p class="nota">' + esc(c.file) + ', ' + plurale(c.pagine, 'pagina', 'pagine') +
-       '. Il PDF resta qui: al foglio vanno solo nomi e importi.</p>';
+       '. Il PDF resta qui: al foglio vanno solo nomi e importi. Le righe gialle sono da guardare.</p>';
   if (c.mesePdf && c.mesePdf !== STATO.mese) {
     h += '<div class="errore">Il PDF sembra di <b>' + esc(c.mesePdf) + '</b>, ma stai guardando <b>' + esc(STATO.mese) +
          '</b>. I bonifici vanno nel mese che vedi in alto: se è sbagliato, chiudi e cambia mese.</div>';
   }
   var opzioni = function (scelto) {
-    return '<option value="">non scrivere</option>' + D.persone.map(function (p) {
-      return '<option' + (p.nome === scelto ? ' selected' : '') + '>' + esc(p.nome) + '</option>';
+    return '<option value="">non scrivere</option>' + (c.nomi || []).map(function (n) {
+      return '<option' + (n === scelto ? ' selected' : '') + '>' + esc(n) + '</option>';
     }).join('');
   };
-  h += '<div class="tabella-scorre"><table><tr><th>Dipendente</th><th>Nel PDF</th><th class="n">Netto</th><th class="n">Bonifico ora</th></tr>';
+  h += '<div class="tabella-scorre"><table><tr><th>Dipendente</th><th>Nel PDF</th><th class="n">Bonifico</th><th class="n">Bonifico ora</th></tr>';
   c.righe.forEach(function (r, i) {
     var p = D.persone.filter(function (x) { return x.nome === r.nome; })[0];
     var ora = p ? p.bonifico : 0;
     var diverso = p && r.netto !== '' && ora && Math.abs(ora - Number(r.netto)) > 0.005;
-    h += '<tr' + (r.nome ? '' : ' class="cambiata"') + '><td><select class="cas largo" onchange="cedNome(' + i + ', this.value)" aria-label="Dipendente">' +
+    h += '<tr' + (r.giallo ? ' class="cambiata"' : '') + '><td><select class="cas largo" onchange="cedNome(' + i + ', this.value)" aria-label="Dipendente">' +
          opzioni(r.nome) + '</select></td>' +
-         '<td class="nota">' + esc(pagineTesto(r.pagine)) + '<br>' + esc(r.letto) +
-           (r.sommati > 1 ? '<br>' + r.sommati + ' cedolini, sommati' : '') +
-           (r.netto === '' ? '<br><span class="segnale">netto non trovato: scrivilo tu</span>' : '') + '</td>' +
+         '<td class="nota">' + esc(pagineTesto(r.pagine)) + ', ' + esc(r.letto) +
+           (r.cedolino !== null ? '<br>retribuzione netta ' + eur(r.cedolino) : '') +
+           r.note.map(function (x) { return '<br><span class="segnale">' + esc(x) + '</span>'; }).join('') + '</td>' +
          '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.01" min="0" value="' + esc(r.netto) + '" ' +
-           'oninput="cedNetto(' + i + ', this.value)" aria-label="Netto"></td>' +
+           'oninput="cedNetto(' + i + ', this.value)" aria-label="Bonifico"></td>' +
          '<td class="n' + (diverso ? ' segnale' : '') + '">' + (ora ? eur(ora) : '') + '</td></tr>';
   });
   h += '</table></div>';
@@ -1122,7 +1236,14 @@ function pannelloCedolini() {
   return h;
 }
 
-function cedNome(i, v) { STATO.ced.righe[i].nome = v; disegnaElenco(); }
+function cedNome(i, v) {
+  var r = STATO.ced.righe[i];
+  r.nome = v;
+  /* chi ha il bonifico fisso: scelto a mano, prende il fisso */
+  var a = (LNK && LNK.persone || []).filter(function (x) { return x.nome === v; })[0];
+  if (a && a.bonificoFisso) r.netto = a.bonificoFisso;
+  disegnaElenco();
+}
 function cedNetto(i, v) {
   STATO.ced.righe[i].netto = v === '' ? '' : Number(v);
   /* aggiorno solo il pulsante, cosi' la casella non perde il cursore */
