@@ -97,6 +97,8 @@ Poi **fai un conteggio vero dello scaffale** dal link master (Deposito ▸ Fai u
 | Ore o prezzi da correggere | Link master ▸ Dipendenti ▸ apri le persone ▸ cambia tutte le caselle che vuoi (restano in giallo) ▸ **Salva tutto** nella barra in basso (o la Scheda, come prima) |
 | Il dipendente vede le tue correzioni? | Sì: nella sua pagina compaiono con il tuo valore e la scritta *corretto dall'ufficio*, e lui non le può più cambiare |
 | Compensi fissi del mese | Si scrivono da soli all'inizio del mese per tutti i dipendenti attivi, anche per chi non apre mai l'app. Per togliere un fisso in un mese mettilo a **0** dal master. Se aggiungi un fisso in Assegnazioni a mese iniziato: menu *Prepara il mese* |
+| Busta pagata | Link master ▸ Dipendenti ▸ la spunta a sinistra del nome. Si salva subito nel foglio *Pagamenti*, con l'importo di quel momento: se poi il netto cambia, il master scrive "pagati X, ora Y". *Solo da pagare* mostra chi manca |
+| Bonifici dai cedolini | Link master ▸ Dipendenti ▸ *Bonifici dal PDF dei cedolini*: scegli prima il mese giusto, poi il PDF del consulente. La pagina trova persona e netto, tu controlli la tabella e premi *Scrivi*. Il PDF resta sul tuo dispositivo: al foglio vanno solo nomi e importi |
 | Bonifico già fatto | Link master ▸ Dipendenti ▸ *Da togliere dalla busta* (o il foglio Paghe, come prima) |
 | Arriva un ordine | Link master ▸ Deposito ▸ *Registra un arrivo* (quantità come le compri: taniche, cartoni...) |
 | Hai contato lo scaffale | Link master ▸ Deposito ▸ *Fai un conteggio* |
