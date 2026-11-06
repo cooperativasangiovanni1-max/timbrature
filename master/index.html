@@ -26,7 +26,11 @@
   si salvano tutte insieme con "Salva tutto" (una domanda al foglio per
   persona, senza ricaricare la pagina). Le righe corrette diventano
   "Corretto" e l'app del dipendente non le sovrascrive piu'.
-  Le altre schede (fatturato, timbrature, deposito) salvano subito.
+  Le altre schede (fatturato, timbrature, deposito) salvano subito, come la
+  spunta "pagato" accanto a ogni dipendente (foglio Pagamenti).
+  "Bonifici dal PDF dei cedolini" legge il PDF del consulente sul dispositivo
+  (pdf.js, scaricato solo quando serve) e scrive il netto di ognuno come
+  bonifico del mese: al foglio vanno solo nomi e importi, mai il file.
 -->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -111,7 +115,9 @@
              transform: rotate(45deg); transition: transform .15s; justify-self: end; margin-top: -4px; }
   .riga.aperta > .testa-riga .freccia, .riga.aperta > .lavoro-testa .freccia { transform: rotate(-135deg); margin-top: 4px; }
 
-  .persona > .testa-riga { grid-template-columns: minmax(0, 1fr) 150px 140px 14px; }
+  .persona { display: grid; grid-template-columns: 54px minmax(0, 1fr); }
+  .persona > .testa-riga { grid-template-columns: minmax(0, 1fr) 150px 140px 14px; padding-left: 0; }
+  .persona > .aperto-qui { grid-column: 1 / -1; padding-left: 54px; }
   .lavoro { display: grid; grid-template-columns: 54px minmax(0, 1fr); }
   .lavoro > .testa-riga { grid-template-columns: minmax(0, 1fr) 140px 120px 14px; padding-left: 0; }
   .lavoro > .aperto-qui { grid-column: 1 / -1; padding-left: 54px; }
@@ -195,6 +201,16 @@
   body.con-barra .pagina { padding-bottom: 120px; }
   body.con-barra #messaggio { bottom: 90px; }
 
+  /* bonifici dai cedolini */
+  .ced-avvio { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 12px 0; border-bottom: 1px solid var(--linea); }
+  .ced-avvio .bott { cursor: pointer; }
+  .ced { background: var(--bianco); border: 1px solid var(--linea); border-radius: 12px; padding: 14px 16px; margin: 12px 0 8px; }
+  .ced-testa { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .ced-testa h3 { margin: 0; font-size: 16px; color: var(--inchiostro); }
+  .ced select.cas { min-width: 170px; }
+  .ced-azioni { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; }
+  .ced-azioni .primo { padding: 9px 16px; font-size: 15px; }
+
   .sezione { margin: 26px 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .sezione h2 { font-family: "Barlow Condensed", sans-serif; font-size: 24px; font-weight: 700; margin: 0; }
   .sezione .spiega { color: var(--grigio); font-size: 14px; }
@@ -209,8 +225,8 @@
     .pagina { padding: 12px 14px 70px; }
     .filtri { margin-left: 0; width: 100%; justify-content: space-between; padding-bottom: 10px; }
     .cerca { width: 100%; max-width: 230px; }
-    .lavoro { grid-template-columns: 46px minmax(0, 1fr); }
-    .lavoro > .aperto-qui { padding-left: 0; }
+    .lavoro, .persona { grid-template-columns: 46px minmax(0, 1fr); }
+    .lavoro > .aperto-qui, .persona > .aperto-qui { padding-left: 0; }
     .lavoro > .testa-riga, .persona > .testa-riga { grid-template-columns: minmax(0, 1fr) auto 14px; }
     .testa-riga .barra-sfondo { grid-column: 1 / 2; grid-row: 3; margin-top: 4px; }
     .persona > .testa-riga .stato { grid-column: 1 / 2; grid-row: 2; }
@@ -277,7 +293,7 @@ var DEP = null;                   /* il deposito */
 var LNK = null;                   /* i link personali */
 var DETT = {};                    /* il dettaglio delle persone aperte */
 var MOD = {};                     /* modifiche non ancora salvate, persona per persona */
-var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {}, rileggi: false };
+var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {}, rileggi: false, ced: null };
 
 var SVG_SPUNTA = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#fff" ' +
                  'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -336,6 +352,7 @@ function rinfrescaMese() {
   STATO.rileggi = false;
   return api('master.mese', { k: CHIAVE, mese: STATO.mese }).then(function (d) {
     D = d; DETT = {};
+    applicaSpunteInViaggio();
     disegnaFrase();
     if (STATO.scheda === 'persone' || STATO.scheda === 'lavori') disegnaElenco();
   }).catch(function () { STATO.rileggi = true; });
@@ -376,6 +393,7 @@ function caricaLink() {
 function disegnaTutto() {
   document.getElementById('aggiornato').textContent = 'aggiornato alle ' + D.aggiornato.slice(-5);
   document.getElementById('comandi').classList.remove('nascosto');
+  impostaFiltro(STATO.scheda);
   disegnaFrase();
   disegnaElenco();
 }
@@ -388,6 +406,14 @@ function disegnaFrase() {
   if (t.inviati && t.inviati === t.persone) h += ', e tutti hanno già inviato le ore. ';
   else if (t.inviati) h += '; ' + t.inviati + (t.inviati === 1 ? ' ha' : ' hanno') + ' già inviato le ore. ';
   else h += '. ';
+  /* le buste gia' pagate (la spunta accanto a ogni dipendente) */
+  if (t.pagati && t.pagati === t.persone) h += '<span class="fatto">Le hai già pagate tutte.</span> ';
+  else if (t.pagati) h += 'Ne hai già ' + (t.pagati === 1 ? 'pagata una' : 'pagate ' + t.pagati) +
+                          ', restano <b class="num">' + eur(t.restaDaPagare) + '</b>. ';
+  var cambiate = D.persone.filter(function (p) {
+    return p.pagato && p.pagatoImporto !== null && p.pagatoImporto !== undefined && Math.abs(p.pagatoImporto - p.netto) > 0.005;
+  }).length;
+  if (cambiate) h += '<span class="dafare">' + (cambiate === 1 ? 'Una busta è cambiata' : cambiate + ' buste sono cambiate') + ' dopo il pagamento.</span> ';
   if (!t.lavori) h += 'Nessun lavoro registrato.';
   else if (!t.daFatturare) h += '<span class="fatto">' + (t.lavori === 1 ? 'L\'unico lavoro è fatturato.' : 'Tutti i ' + t.lavori + ' lavori sono fatturati.') + '</span>';
   else h += '<span class="dafare">' + (t.lavori === 1 ? 'Il lavoro è ancora da fatturare.' :
@@ -416,7 +442,15 @@ function adattaMese() {
 
 function cambiaMese(m) {
   if (!lasciaModifiche()) { document.querySelector('.mese').value = STATO.mese; adattaMese(); return; }
-  STATO.aperti = {}; caricaMese(m);
+  STATO.aperti = {}; STATO.ced = null; caricaMese(m);
+}
+
+/* la casella "Solo da ..." accanto alla ricerca, diversa per ogni scheda */
+function impostaFiltro(s) {
+  var testoFiltro = { persone: 'Solo da pagare', lavori: 'Solo da fatturare', timbrature: 'Solo da controllare' }[s];
+  document.getElementById('filtro-solo').classList.toggle('nascosto', !testoFiltro);
+  if (testoFiltro) document.getElementById('filtro-testo').textContent = testoFiltro;
+  document.getElementById('solo').checked = false;
 }
 
 function scegliScheda(s) {
@@ -424,10 +458,7 @@ function scegliScheda(s) {
   ['persone', 'lavori', 'timbrature', 'deposito', 'link'].forEach(function (x) {
     document.getElementById('tab-' + x).setAttribute('aria-selected', x === s);
   });
-  var testoFiltro = { lavori: 'Solo da fatturare', timbrature: 'Solo da controllare' }[s];
-  document.getElementById('filtro-solo').classList.toggle('nascosto', !testoFiltro);
-  if (testoFiltro) document.getElementById('filtro-testo').textContent = testoFiltro;
-  document.getElementById('solo').checked = false;
+  impostaFiltro(s);
   document.getElementById('cerca').placeholder = s === 'lavori' ? 'Cerca un lavoro' : (s === 'deposito' ? 'Cerca un prodotto o un nome' : 'Cerca un nome');
   if (s === 'timbrature' && !T) return caricaTimbrature();
   if (s === 'deposito' && !DEP) return caricaDeposito();
@@ -472,10 +503,11 @@ function testaRiga(id, sinistra, centro, destra) {
    ================================================================ */
 
 function elencoPersone() {
-  var lista = D.persone.filter(function (p) { return corrisponde(p.nome); });
-  if (!lista.length) return '<div class="vuoto">Nessun nome corrisponde alla ricerca.</div>';
-  return lista.map(function (p) {
-    var id = 'p' + D.persone.indexOf(p);
+  var solo = document.getElementById('solo').checked;
+  var lista = D.persone.filter(function (p) { return corrisponde(p.nome) && (!solo || !p.pagato); });
+  if (!lista.length) return pannelloCedolini() + '<div class="vuoto">' + (solo ? 'Nessuno da pagare: tutte le buste sono pagate.' : 'Nessun nome corrisponde alla ricerca.') + '</div>';
+  return pannelloCedolini() + lista.map(function (p) {
+    var k = D.persone.indexOf(p), id = 'p' + k;
     var stato = p.stato === 'inviato' ? '<span class="stato verde">ha inviato</span>'
               : p.stato === 'in compilazione' ? '<span class="stato ambra">sta compilando</span>'
               : p.righe.length ? '<span class="stato grigio">solo fissi</span>' : '<span class="stato grigio">nessun dato</span>';
@@ -486,7 +518,17 @@ function elencoPersone() {
     if (p.bonifico) breve.push('bonifico ' + eur(p.bonifico));
     if (p.segnalazioniTimbrature) breve.push('<span class="segnale">' + plurale(p.segnalazioniTimbrature, 'turno', 'turni') + ' da controllare</span>');
     if (p.daPrezzare) breve.push('<span class="segnale">' + plurale(p.daPrezzare, 'intervento', 'interventi') + ' da prezzare</span>');
+    if (p.pagato) {
+      breve.push('<span class="verde-t">pagato' + (p.pagatoIl ? ' il ' + esc(p.pagatoIl.slice(0, 5)) : '') + '</span>');
+      /* il netto e' cambiato dopo la spunta: c'e' una differenza da dare o da riprendere */
+      if (p.pagatoImporto !== null && p.pagatoImporto !== undefined && Math.abs(p.pagatoImporto - p.netto) > 0.005) {
+        breve.push('<span class="segnale">pagati ' + eur(p.pagatoImporto) + ', ora ' + eur(p.netto) + '</span>');
+      }
+    }
     return '<div class="riga persona' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
+      '<div class="spunta"><input type="checkbox" id="pg' + k + '"' + (p.pagato ? ' checked' : '') +
+      ' onchange="paga(' + k + ', this.checked)" aria-label="Pagato: ' + esc(p.nome) + '">' +
+      '<label for="pg' + k + '" title="Pagato">' + SVG_SPUNTA + '</label></div>' +
       testaRiga(id, '<span class="nome">' + esc(p.nome) + '</span><br><span class="breve">' + (breve.join(', ') || 'nessuna voce') +
                 '<span class="dasalvare" id="' + id + 'x">' + testoDaSalvare(p.nome) + '</span></span>',
                 stato, eur(p.netto)) +
@@ -496,8 +538,9 @@ function elencoPersone() {
 
 /* Il dettaglio modificabile: lo chiede al foglio la prima volta che si apre. */
 function riempiPersona(id) {
-  var p = D.persone[Number(id.slice(1))];
-  if (DETT[p.nome]) { document.getElementById(id + '-d').innerHTML = dettaglioPersona(id, p, DETT[p.nome]); return; }
+  var p = D.persone[Number(id.slice(1))], qui = document.getElementById(id + '-d');
+  if (!p || !qui) return;            /* aperta ma nascosta dalla ricerca o dal filtro */
+  if (DETT[p.nome]) { qui.innerHTML = dettaglioPersona(id, p, DETT[p.nome]); return; }
   api('master.persona', { k: CHIAVE, mese: STATO.mese, nome: p.nome }).then(function (d) {
     DETT[p.nome] = d;
     var box = document.getElementById(id + '-d');
@@ -763,13 +806,359 @@ function nuoviNumeri(nuovo) {
   });
   nuovo.timbrature = D.timbrature;
   D = nuovo;
+  applicaSpunteInViaggio();
   document.getElementById('aggiornato').textContent = 'aggiornato alle ' + D.aggiornato.slice(-5);
+}
+
+
+/* ---------------- la spunta "pagato" ----------------
+   Cambia subito; se il foglio non risponde torna com'era. Finche' la
+   spunta e' in viaggio, se arrivano numeri nuovi del mese vince la spunta. */
+
+var IN_VIAGGIO = {};
+
+function segnaQui(p, valore, il, importo) {
+  p.pagato = valore;
+  p.pagatoIl = valore ? il : '';
+  p.pagatoImporto = valore ? importo : null;
+}
+
+function ricontaPagati() {
+  var t = D.totali;
+  t.pagati = 0; t.restaDaPagare = 0;
+  D.persone.forEach(function (p) { if (p.pagato) t.pagati++; else t.restaDaPagare += p.netto; });
+  t.restaDaPagare = Math.round(t.restaDaPagare * 100) / 100;
+}
+
+function applicaSpunteInViaggio() {
+  D.persone.forEach(function (p) {
+    var x = IN_VIAGGIO[p.nome];
+    if (x) segnaQui(p, x.valore, x.il, p.netto);
+  });
+  ricontaPagati();
+}
+
+function paga(k, valore) {
+  var p = D.persone[k], nome = p.nome, mese = D.mese;
+  var prima = { valore: p.pagato, il: p.pagatoIl, importo: p.pagatoImporto };
+  var oggi = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  segnaQui(p, valore, oggi, p.netto);
+  IN_VIAGGIO[nome] = { valore: valore, il: oggi };
+  ricontaPagati(); disegnaFrase(); disegnaElenco();
+  api('master.pagato', { k: CHIAVE, mese: mese, nome: nome, pagato: valore, importo: p.netto }).then(function () {
+    delete IN_VIAGGIO[nome];
+    dici(valore ? nome + ': segnato come pagato.' : nome + ': tolto il pagato.');
+  }).catch(function (e) {
+    delete IN_VIAGGIO[nome];
+    if (D.mese === mese) {
+      var q = D.persone.filter(function (x) { return x.nome === nome; })[0];
+      if (q) segnaQui(q, prima.valore, prima.il, prima.importo);
+      ricontaPagati(); disegnaFrase();
+      if (STATO.scheda === 'persone') disegnaElenco();
+    }
+    dici('Non sono riuscito a salvare la spunta di ' + nome + ': ' + e.message, true);
+  });
 }
 
 /* chiudere o ricaricare la pagina con modifiche non salvate: il browser chiede conferma */
 window.addEventListener('beforeunload', function (e) {
   if (contaModifiche() || SALVO) { e.preventDefault(); e.returnValue = ''; }
 });
+
+
+/* ================================================================
+   3b. BONIFICI DAI CEDOLINI
+   Carichi il PDF con i cedolini del mese (quello del consulente):
+   la pagina lo legge QUI, sul telefono o sul computer, con pdf.js.
+   Per ogni cedolino trova la persona e il netto, e ti fa controllare
+   tutto prima di scrivere. Al foglio arrivano solo nomi e importi:
+   il PDF non viene salvato da nessuna parte.
+   ================================================================ */
+
+var PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+var MESI_IT = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio',
+               'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+
+/* il lettore di PDF si scarica solo quando serve */
+function caricaPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return new Promise(function (ok, ko) {
+    var s = document.createElement('script');
+    s.src = PDFJS + 'pdf.min.js';
+    s.onload = function () { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(pdfjsLib); };
+    s.onerror = function () { ko(new Error('Non riesco a caricare il lettore di PDF. Controlla la connessione e riprova.')); };
+    document.head.appendChild(s);
+  });
+}
+
+function semplice(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/* "1.234,56" -> 1234.56 ; null se non e' un importo */
+function importoDa(t) {
+  var m = String(t || '').replace(/[*€\s]/g, '').match(/-?\d{1,3}(?:\.\d{3})+,\d{2}|-?\d+,\d{2}/);
+  return m ? Number(m[0].replace(/\./g, '').replace(',', '.')) : null;
+}
+
+/* Il testo di una pagina, riga per riga, con la posizione di ogni pezzo. */
+function righeDiPagina(pagina) {
+  return pagina.getTextContent().then(function (c) {
+    var pezzi = c.items.filter(function (it) { return String(it.str).trim(); }).map(function (it) {
+      return { s: String(it.str), x: it.transform[4], y: it.transform[5], w: it.width || 0 };
+    });
+    pezzi.sort(function (a, b) { return (b.y - a.y) || (a.x - b.x); });
+    var righe = [];
+    pezzi.forEach(function (p) {
+      var r = righe.length ? righe[righe.length - 1] : null;
+      if (r && Math.abs(r.y - p.y) <= 3) r.pezzi.push(p);
+      else righe.push({ y: p.y, pezzi: [p] });
+    });
+    righe.forEach(function (r) {
+      r.pezzi.sort(function (a, b) { return a.x - b.x; });
+      r.testo = r.pezzi.map(function (p) { return p.s; }).join(' ').replace(/\s+/g, ' ');
+    });
+    return righe;
+  });
+}
+
+/* Chi e' il dipendente di questa pagina: tutte le parole del suo nome sulla stessa riga. */
+function nomeDiPagina(righe) {
+  var meglio = null;
+  D.persone.forEach(function (p) {
+    var parole = semplice(p.nome).split(' ').filter(function (x) { return x.length > 1; });
+    if (!parole.length) return;
+    for (var i = 0; i < righe.length; i++) {
+      var qui = ' ' + semplice(righe[i].testo) + ' ';
+      if (parole.every(function (w) { return qui.indexOf(' ' + w + ' ') >= 0; })) {
+        if (!meglio || parole.length > meglio.parole || (parole.length === meglio.parole && i < meglio.riga)) {
+          meglio = { nome: p.nome, parole: parole.length, riga: i, letto: righe[i].testo.trim() };
+        }
+        break;
+      }
+    }
+  });
+  return meglio;
+}
+
+/* Il netto del cedolino: l'importo accanto (o sotto) a "Netto in busta", "Netto del mese"... */
+var NETTO_BUONO = /netto\s*(in\s*busta|del\s*mese|a\s*pagare|da\s*pagare|busta|pagato|corrisposto|mese|retribuzione)/i;
+var NETTO_SOLO = /(^|[^a-z])netto([^a-z]|$)/i;
+
+function nettoDiPagina(righe) {
+  var trovato = null;
+  [NETTO_BUONO, NETTO_SOLO].some(function (re) {
+    righe.forEach(function (r, i) {
+      if (!re.test(r.testo)) return;
+      if (re === NETTO_SOLO && /imponib|irpef|lordo|contribut/i.test(r.testo)) return;
+      /* il pezzo con l'etichetta, per sapere dove sta */
+      var et = r.pezzi.filter(function (p) { return /netto/i.test(p.s); })[0] || r.pezzi[0];
+      /* 1. sulla stessa riga, dopo l'etichetta */
+      var dopo = r.testo.slice(r.testo.search(re));
+      var v = importoDa(dopo.replace(/^\D*?netto\s*(in\s*busta|del\s*mese|a\s*pagare|da\s*pagare|busta|pagato|corrisposto|mese|retribuzione)?/i, ''));
+      /* 2. altrimenti sotto, nella stessa colonna */
+      if (v === null) {
+        var cx = et.x + et.w / 2, migliore = null;
+        for (var j = i + 1; j < righe.length && righe[i].y - righe[j].y < 70; j++) {
+          righe[j].pezzi.forEach(function (p) {
+            var n = importoDa(p.s);
+            if (n === null) return;
+            var d = Math.abs(p.x + p.w / 2 - cx);
+            if (d < 90 && (!migliore || d < migliore.d)) migliore = { v: n, d: d };
+          });
+          if (migliore) break;
+        }
+        if (migliore) v = migliore.v;
+      }
+      if (v !== null) trovato = v;      /* vale l'ultimo della pagina: il netto sta in fondo */
+    });
+    return trovato !== null;
+  });
+  return trovato;
+}
+
+var CODICE_FISCALE = /\b[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]\b/;
+
+function apriCedolini(input) {
+  var f = input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  STATO.ced = { file: f.name, stato: 'leggo', righe: [], pagine: 0, mesePdf: '', avviso: '' };
+  disegnaElenco();
+  var lettore = new FileReader();
+  lettore.onload = function () { leggiCedolini(new Uint8Array(lettore.result)); };
+  lettore.onerror = function () { erroreCed('Non riesco ad aprire il file.'); };
+  lettore.readAsArrayBuffer(f);
+}
+
+function erroreCed(testo) {
+  if (!STATO.ced) return;
+  STATO.ced.stato = 'errore'; STATO.ced.errore = testo;
+  if (STATO.scheda === 'persone') disegnaElenco();
+}
+
+function leggiCedolini(dati) {
+  caricaPdfJs().then(function (pdfjs) {
+    return pdfjs.getDocument({ data: dati }).promise;
+  }).then(function (pdf) {
+    var lette = [];
+    var catena = Promise.resolve();
+    for (var n = 1; n <= pdf.numPages; n++) (function (n) {
+      catena = catena.then(function () { return pdf.getPage(n); }).then(righeDiPagina).then(function (righe) {
+        var tutto = righe.map(function (r) { return r.testo; }).join('\n');
+        var cf = tutto.match(CODICE_FISCALE);
+        lette.push({ n: n, righe: righe, testo: tutto, nome: nomeDiPagina(righe),
+                     netto: nettoDiPagina(righe), cf: cf ? cf[0] : '' });
+      });
+    })(n);
+    return catena.then(function () { return { pdf: pdf, lette: lette }; });
+  }).then(function (r) {
+    if (!STATO.ced) return;
+    var c = STATO.ced;
+    c.pagine = r.pdf.numPages;
+    if (!r.lette.some(function (p) { return p.testo.trim(); })) {
+      return erroreCed('Nel PDF non c\'è testo da leggere: sembra una scansione. ' +
+                       'I bonifici vanno scritti a mano, oppure chiedi al consulente il PDF originale.');
+    }
+    c.righe = raggruppaCedolini(r.lette);
+    /* di che mese e' il PDF */
+    var conta = {};
+    r.lette.forEach(function (p) {
+      var re = new RegExp('(' + MESI_IT.join('|') + ')\\s+(20\\d\\d)', 'gi'), m;
+      while ((m = re.exec(p.testo))) { var k = m[1].toLowerCase() + ' ' + m[2]; conta[k] = (conta[k] || 0) + 1; }
+    });
+    c.mesePdf = Object.keys(conta).sort(function (a, b) { return conta[b] - conta[a]; })[0] || '';
+    c.stato = 'pronto';
+    if (STATO.scheda === 'persone') disegnaElenco();
+  }).catch(function (e) {
+    erroreCed(e && e.message && !/pdf/i.test(e.name || '') ? e.message : 'Non riesco a leggere questo PDF.');
+  });
+}
+
+/* Pagine -> una riga per persona. Una pagina senza nome e senza codice fiscale
+   nuovo e' il seguito del cedolino prima (cedolini di due pagine). */
+function raggruppaCedolini(lette) {
+  var righe = [], ultimo = null;
+  lette.forEach(function (p) {
+    if (p.nome) {
+      /* la stessa persona piu' avanti (per esempio la tredicesima a parte) va nella stessa riga */
+      var g = righe.filter(function (x) { return x.nome === p.nome.nome; })[0];
+      if (!g) { g = { nome: p.nome.nome, pagine: [], netti: [], letto: p.nome.letto, cf: p.cf }; righe.push(g); }
+      g.pagine.push(p.n);
+      if (p.netto !== null) g.netti.push(p.netto);
+      ultimo = g;
+      return;
+    }
+    var seguito = ultimo && (!p.cf || p.cf === ultimo.cf) && !(p.netto !== null && ultimo.netti.length);
+    if (seguito) {
+      ultimo.pagine.push(p.n);
+      if (p.netto !== null) ultimo.netti.push(p.netto);
+      return;
+    }
+    /* nessun dipendente riconosciuto: si assegna a mano, o si lascia */
+    var riga = p.righe.filter(function (r) { return CODICE_FISCALE.test(r.testo); })[0] ||
+               p.righe.filter(function (r) { return /cognome|nominativo|dipendente/i.test(r.testo); })[0];
+    righe.push({ nome: '', pagine: [p.n], netti: p.netto !== null ? [p.netto] : [], cf: p.cf,
+                 letto: riga ? riga.testo.trim().slice(0, 60) : (p.cf ? 'cod. fisc. ' + p.cf : 'nessun nome riconosciuto') });
+    ultimo = null;
+  });
+  return righe.map(function (g) {
+    var somma = g.netti.reduce(function (s, x) { return s + x; }, 0);
+    return { nome: g.nome, pagine: g.pagine, letto: g.letto, sommati: g.netti.length,
+             netto: g.netti.length ? Math.round(somma * 100) / 100 : '' };
+  });
+}
+
+function pagineTesto(v) {
+  if (v.length === 1) return 'pag. ' + v[0];
+  var consecutive = v.every(function (x, i) { return !i || x === v[i - 1] + 1; });
+  return 'pag. ' + (consecutive ? v[0] + '–' + v[v.length - 1] : v.join(', '));
+}
+
+/* il riquadro in cima all'elenco dei dipendenti */
+function pannelloCedolini() {
+  var c = STATO.ced;
+  if (!c) {
+    return '<div class="ced-avvio"><label class="bott"><input type="file" accept="application/pdf,.pdf" ' +
+           'onchange="apriCedolini(this)" hidden>Bonifici dal PDF dei cedolini</label>' +
+           '<span class="nota">legge il netto di ognuno e lo scrive come bonifico di ' + esc(STATO.mese) + '</span></div>';
+  }
+  var h = '<div class="ced"><div class="ced-testa"><h3>Bonifici dai cedolini, ' + esc(STATO.mese) + '</h3>' +
+          '<button class="bott" onclick="chiudiCedolini()">Chiudi</button></div>';
+  if (c.stato === 'leggo') return h + '<p class="attesa">Leggo ' + esc(c.file) + '…</p></div>';
+  if (c.stato === 'errore') return h + '<div class="errore">' + esc(c.errore) + '</div></div>';
+
+  h += '<p class="nota">' + esc(c.file) + ', ' + plurale(c.pagine, 'pagina', 'pagine') +
+       '. Il PDF resta qui: al foglio vanno solo nomi e importi.</p>';
+  if (c.mesePdf && c.mesePdf !== STATO.mese) {
+    h += '<div class="errore">Il PDF sembra di <b>' + esc(c.mesePdf) + '</b>, ma stai guardando <b>' + esc(STATO.mese) +
+         '</b>. I bonifici vanno nel mese che vedi in alto: se è sbagliato, chiudi e cambia mese.</div>';
+  }
+  var opzioni = function (scelto) {
+    return '<option value="">non scrivere</option>' + D.persone.map(function (p) {
+      return '<option' + (p.nome === scelto ? ' selected' : '') + '>' + esc(p.nome) + '</option>';
+    }).join('');
+  };
+  h += '<div class="tabella-scorre"><table><tr><th>Dipendente</th><th>Nel PDF</th><th class="n">Netto</th><th class="n">Bonifico ora</th></tr>';
+  c.righe.forEach(function (r, i) {
+    var p = D.persone.filter(function (x) { return x.nome === r.nome; })[0];
+    var ora = p ? p.bonifico : 0;
+    var diverso = p && r.netto !== '' && ora && Math.abs(ora - Number(r.netto)) > 0.005;
+    h += '<tr' + (r.nome ? '' : ' class="cambiata"') + '><td><select class="cas largo" onchange="cedNome(' + i + ', this.value)" aria-label="Dipendente">' +
+         opzioni(r.nome) + '</select></td>' +
+         '<td class="nota">' + esc(pagineTesto(r.pagine)) + '<br>' + esc(r.letto) +
+           (r.sommati > 1 ? '<br>' + r.sommati + ' cedolini, sommati' : '') +
+           (r.netto === '' ? '<br><span class="segnale">netto non trovato: scrivilo tu</span>' : '') + '</td>' +
+         '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.01" min="0" value="' + esc(r.netto) + '" ' +
+           'oninput="cedNetto(' + i + ', this.value)" aria-label="Netto"></td>' +
+         '<td class="n' + (diverso ? ' segnale' : '') + '">' + (ora ? eur(ora) : '') + '</td></tr>';
+  });
+  h += '</table></div>';
+  var n = c.righe.filter(function (r) { return r.nome && Number(r.netto) > 0; }).length;
+  h += '<div class="ced-azioni"><button class="bott primo" onclick="scriviBonificiCed()"' + (n ? '' : ' disabled') + '>' +
+       (n ? 'Scrivi ' + plurale(n, 'bonifico', 'bonifici') : 'Nessun bonifico da scrivere') + '</button>' +
+       '<span class="nota">Sostituiscono i bonifici già scritti per ' + esc(STATO.mese) + '. Il dipendente non li vede.</span></div></div>';
+  return h;
+}
+
+function cedNome(i, v) { STATO.ced.righe[i].nome = v; disegnaElenco(); }
+function cedNetto(i, v) {
+  STATO.ced.righe[i].netto = v === '' ? '' : Number(v);
+  /* aggiorno solo il pulsante, cosi' la casella non perde il cursore */
+  var n = STATO.ced.righe.filter(function (r) { return r.nome && Number(r.netto) > 0; }).length;
+  var b = document.querySelector('.ced-azioni .primo');
+  if (b) { b.disabled = !n; b.textContent = n ? 'Scrivi ' + plurale(n, 'bonifico', 'bonifici') : 'Nessun bonifico da scrivere'; }
+}
+function chiudiCedolini() { STATO.ced = null; disegnaElenco(); }
+
+function scriviBonificiCed() {
+  var c = STATO.ced, visti = {}, doppio = '';
+  var righe = c.righe.filter(function (r) { return r.nome && Number(r.netto) > 0; }).map(function (r) {
+    if (visti[r.nome]) doppio = r.nome;
+    visti[r.nome] = true;
+    return { nome: r.nome, importo: Number(r.netto) };
+  });
+  if (doppio) return dici(doppio + ' è scelto in due righe: lasciane una sola (o somma tu i due importi).', true);
+  if (!righe.length) return;
+  if (!confirm('Scrivo ' + plurale(righe.length, 'bonifico', 'bonifici') + ' per ' + STATO.mese + '?\n\n' +
+               'Se qualcuno aveva già un bonifico in questo mese, viene sostituito.')) return;
+  var b = document.querySelector('.ced-azioni .primo');
+  if (b) { b.disabled = true; b.textContent = 'Scrivo…'; }
+  api('master.bonifici', { k: CHIAVE, mese: STATO.mese, righe: righe }).then(function (r) {
+    righe.forEach(function (x) {
+      delete DETT[x.nome];                        /* il dettaglio si rilegge con il bonifico nuovo */
+      if (MOD[x.nome]) { delete MOD[x.nome].bon; pulisci(x.nome); }
+    });
+    nuoviNumeri(r.mese);
+    STATO.ced = null;
+    disegnaFrase(); disegnaElenco(); aggiornaBarra();
+    dici('Scritti ' + plurale(r.scritti, 'bonifico', 'bonifici') + ' di ' + STATO.mese + '.');
+  }).catch(function (e) {
+    if (b) { b.disabled = false; b.textContent = 'Scrivi ' + plurale(righe.length, 'bonifico', 'bonifici'); }
+    dici('Non ho scritto i bonifici: ' + e.message, true);
+  });
+}
 
 
 /* ================================================================
