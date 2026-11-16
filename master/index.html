@@ -28,6 +28,14 @@
   "Corretto" e l'app del dipendente non le sovrascrive piu'.
   Le altre schede (fatturato, timbrature, deposito) salvano subito, come la
   spunta "pagato" accanto a ogni dipendente (foglio Pagamenti).
+  Nei Lavori c'e' il conto del mese: canone (da un mese in poi) ed extra di
+  ogni lavoro, altri costi, guadagno. Si salva subito nel foglio Conti.
+  Ogni lavoro mostra il margine (quanto resta dell'incasso, in %) e si
+  possono ordinare per margine, dal piu' alto al piu' basso.
+  La spunta "fatturato" c'e' anche nella scheda di ogni dipendente (e' la
+  stessa del lavoro). Prima di metterla, se sullo stesso lavoro ci sono altri
+  dipendenti, spese, extra o mesi prima non fatturati, un avviso li elenca;
+  da li' si segnano insieme anche i mesi prima (fattura di due mesi).
   "Bonifici dal PDF dei cedolini" legge il PDF del consulente sul dispositivo
   (pdf.js, scaricato solo quando serve) e scrive il netto di ognuno come
   bonifico del mese: al foglio vanno solo nomi e importi, mai il file.
@@ -201,6 +209,51 @@
   body.con-barra .pagina { padding-bottom: 120px; }
   body.con-barra #messaggio { bottom: 90px; }
 
+  /* il conto del mese (scheda Lavori) */
+  .rosso-t { color: var(--rosso); }
+  .barra-piena.oltre { background: var(--rosso); }
+  .conto-t { max-width: 520px; margin: 10px 0 6px; }
+  .conto-t td { padding: 6px 0; }
+  .conto-t tr.sotto td { padding-top: 0; color: var(--grigio); font-size: 14px; border-top: 0; }
+  .conto-t tr.totale td { font-weight: 700; font-size: 17px; }
+  .conto .modulo { margin-top: 12px; }
+
+  /* la spunta "fatturato" nella scheda del dipendente */
+  .fatt-riga { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 0 6px;
+               padding: 6px 0; border-bottom: 1px solid var(--linea-chiara); }
+  .fatt-riga .spunta { justify-content: flex-start; }
+  .fatt-riga .spunta label { width: 30px; height: 30px; }
+  .fatt-riga .spunta label svg { width: 18px; height: 18px; }
+  .fatt-nome { font-weight: 600; }
+
+  /* l'avviso prima di segnare fatturato */
+  dialog.avviso { border: 0; border-radius: 14px; padding: 0; width: min(560px, calc(100vw - 24px));
+                  max-height: calc(100vh - 32px); color: var(--inchiostro); background: var(--bianco);
+                  box-shadow: 0 24px 60px rgba(14, 32, 56, .3); }
+  dialog.avviso::backdrop { background: rgba(14, 32, 56, .45); }
+  .avviso form { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
+  .avviso-dentro { padding: 20px 22px 6px; overflow-y: auto; }
+  .avviso h2 { font-family: "Barlow Condensed", sans-serif; font-size: 27px; font-weight: 700; margin: 0; line-height: 1.15; }
+  .avviso .sottotitolo { color: var(--grigio); margin: 4px 0 4px; font-size: 15px; }
+  .avviso h3 { font-size: 14px; color: var(--grigio); font-weight: 600; margin: 18px 0 4px; }
+  .avviso ul { list-style: none; padding: 0; margin: 0; }
+  .avviso li { padding: 8px 0; border-bottom: 1px solid var(--linea-chiara); display: flex;
+               justify-content: space-between; align-items: baseline; gap: 14px; }
+  .avviso .in-fattura { background: var(--fatto-chiaro); border-radius: 10px; padding: 10px 14px; margin-top: 14px; font-size: 15px; }
+  .avviso .mese-prima { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; width: 100%; }
+  .avviso .mese-prima input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--fatto); flex: none; }
+  .avviso-azioni { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px 18px;
+                   border-top: 1px solid var(--linea-chiara); }
+  .avviso-azioni .bott { padding: 10px 18px; font-size: 15px; }
+
+  /* lavori in ordine di margine */
+  .ordina { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 14px 0 6px; }
+  .ordina .nota { margin-right: 4px; font-size: 14px; }
+  .pill { border: 1px solid var(--linea); background: var(--bianco); border-radius: 16px; padding: 4px 13px; font-size: 14px; }
+  .pill[aria-pressed="true"] { background: var(--inchiostro); color: #fff; border-color: var(--inchiostro); }
+  .ordina + .spiega-mod { margin: 4px 0 6px; }
+  .perc { display: block; font-size: 13px; color: var(--grigio); font-weight: 400; }
+
   /* bonifici dai cedolini */
   .ced-avvio { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 12px 0; border-bottom: 1px solid var(--linea); }
   .ced-avvio .bott { cursor: pointer; }
@@ -277,6 +330,15 @@
   </div>
 </div>
 <div id="messaggio" aria-live="polite"></div>
+<dialog class="avviso" id="avviso" aria-labelledby="avviso-titolo" onclose="chiusoAvviso()">
+  <form method="dialog">
+    <div class="avviso-dentro" id="avviso-dentro"></div>
+    <div class="avviso-azioni">
+      <button class="bott" value="no">Annulla</button>
+      <button class="bott primo" id="avviso-si" value="si">Segna fatturato</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="../config.js"></script>
 <script src="../comune.js"></script>
@@ -293,7 +355,7 @@ var DEP = null;                   /* il deposito */
 var LNK = null;                   /* i link personali */
 var DETT = {};                    /* il dettaglio delle persone aperte */
 var MOD = {};                     /* modifiche non ancora salvate, persona per persona */
-var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {}, rileggi: false, ced: null };
+var STATO = { mese: null, scheda: 'persone', aperti: {}, mesiDep: 3, moduli: {}, rileggi: false, ced: null, canoni: null, ordine: 'nome' };
 
 var SVG_SPUNTA = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5l4 4 8-9" fill="none" stroke="#fff" ' +
                  'stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -414,10 +476,18 @@ function disegnaFrase() {
     return p.pagato && p.pagatoImporto !== null && p.pagatoImporto !== undefined && Math.abs(p.pagatoImporto - p.netto) > 0.005;
   }).length;
   if (cambiate) h += '<span class="dafare">' + (cambiate === 1 ? 'Una busta è cambiata' : cambiate + ' buste sono cambiate') + ' dopo il pagamento.</span> ';
+  /* il conto del mese (scheda Lavori), quando ci sono i canoni */
+  var c = D.conto;
+  if (c && c.incassi) {
+    h += c.guadagno >= 0 ? 'Il mese ha reso <b class="num">' + eur(c.guadagno) + '</b> su ' + eur(c.incassi) + ' di incassi' + (c.senzaCanone ? ' (mancano dei canoni)' : '') + '. '
+                         : '<span class="dafare">Il mese è in perdita di <b class="num">' + eur(-c.guadagno) + '</b>' + (c.senzaCanone ? ' (mancano dei canoni)' : '') + '.</span> ';
+  }
   if (!t.lavori) h += 'Nessun lavoro registrato.';
   else if (!t.daFatturare) h += '<span class="fatto">' + (t.lavori === 1 ? 'L\'unico lavoro è fatturato.' : 'Tutti i ' + t.lavori + ' lavori sono fatturati.') + '</span>';
   else h += '<span class="dafare">' + (t.lavori === 1 ? 'Il lavoro è ancora da fatturare.' :
             '<b>' + t.daFatturare + '</b> lavori su ' + t.lavori + ' ' + (t.daFatturare === 1 ? 'è' : 'sono') + ' ancora da fatturare.') + '</span>';
+  var arretrati = D.lavori.filter(function (l) { return l.arretrati && l.arretrati.length; }).length;
+  if (arretrati) h += ' <span class="dafare">' + (arretrati === 1 ? 'Un lavoro ha' : arretrati + ' lavori hanno') + ' anche mesi prima non fatturati.</span>';
   if (t.daPrezzare) h += ' <span class="dafare">' + plurale(t.daPrezzare, 'intervento', 'interventi') + ' da prezzare.</span>';
   var segn = D.persone.reduce(function (s, p) { return s + (p.segnalazioniTimbrature || 0); }, 0);
   if (segn) h += ' <span class="dafare">' + plurale(segn, 'turno timbrato', 'turni timbrati') + ' da controllare.</span>';
@@ -442,7 +512,7 @@ function adattaMese() {
 
 function cambiaMese(m) {
   if (!lasciaModifiche()) { document.querySelector('.mese').value = STATO.mese; adattaMese(); return; }
-  STATO.aperti = {}; STATO.ced = null; caricaMese(m);
+  STATO.aperti = {}; STATO.ced = null; STATO.canoni = null; caricaMese(m);
 }
 
 /* la casella "Solo da ..." accanto alla ricerca, diversa per ogni scheda */
@@ -568,7 +638,10 @@ function dettaglioPersona(id, p, d) {
     '<div>Spese<b class="num">' + eur(p.spese) + '</b></div>' +
     '<div>Bonifico<b class="num">' + eur(p.bonifico) + '</b></div>' +
     (p.trattenute ? '<div>Trattenute<b class="num">' + eur(p.trattenute) + '</b></div>' : '') +
-    '<div class="netto">Da pagare<b class="num">' + eur(p.netto) + '</b></div></div></div>' +
+    '<div class="netto">Da pagare<b class="num">' + eur(p.netto) + '</b></div></div></div>';
+  /* i suoi lavori con la spunta "fatturato" (la stessa della scheda Lavori) */
+  var pk = Number(id.slice(1)), bf = bloccoFatture(pk, p);
+  h += '<div id="' + id + '-f"' + (bf ? ' class="blocco"' : '') + '>' + bf + '</div>' +
     '<p class="spiega-mod">Correggi tutte le caselle che vuoi, anche di più persone: si salvano insieme con «Salva tutto», in basso.</p>';
 
   var tb = (d.timbrate && d.timbrate.perLavoro) || {};
@@ -805,7 +878,11 @@ function nuoviNumeri(nuovo) {
     p.segnalazioniTimbrature = x ? x.segnalazioniTimbrature : 0;
   });
   nuovo.timbrature = D.timbrature;
+  /* i lavori aperti restano aperti anche se l'elenco cambia (un lavoro nuovo con il canone) */
+  var lavoriAperti = Object.keys(STATO.aperti).filter(function (id) { return id.charAt(0) === 'l' && STATO.aperti[id]; })
+    .map(function (id) { var l = D.lavori[Number(id.slice(1))]; delete STATO.aperti[id]; return l && l.luogo; });
   D = nuovo;
+  D.lavori.forEach(function (l, i) { if (lavoriAperti.indexOf(l.luogo) >= 0) STATO.aperti['l' + i] = true; });
   applicaSpunteInViaggio();
   document.getElementById('aggiornato').textContent = 'aggiornato alle ' + D.aggiornato.slice(-5);
 }
@@ -1283,36 +1360,85 @@ function scriviBonificiCed() {
 
 
 /* ================================================================
-   4. LAVORI — con la spunta "fatturato"
+   4. LAVORI — il conto del mese e la spunta "fatturato"
+   Per ogni lavoro: quanto paga il cliente (canone del mese + extra),
+   quanto costa (dipendenti e spese) e quanto resta. In cima il conto
+   di tutto il mese, con gli altri costi (F24, consulente...).
+   Tutto IVA esclusa. Si salva subito (foglio Conti).
    ================================================================ */
+
+/* il margine: la parte dell'incasso che resta dopo dipendenti e spese del lavoro */
+function margine(l) { return !l.generale && l.incasso > 0 ? l.guadagno / l.incasso : null; }
+function percento(x) { return (Math.round(x * 100) || 0) + '%'; }   /* stesso segno meno degli importi */
 
 function elencoLavori() {
   var solo = document.getElementById('solo').checked;
   var lista = D.lavori.filter(function (l) { return corrisponde(l.luogo) && (!solo || (!l.fatturato && !l.generale)); });
-  if (!lista.length) return '<div class="vuoto">' + (solo ? 'Nessun lavoro da fatturare: tutto fatto.' : 'Nessun lavoro corrisponde alla ricerca.') + '</div>';
-  var massimo = Math.max.apply(null, D.lavori.map(function (l) { return l.totale; })) || 1;
-  return lista.map(function (l) {
+  if (STATO.ordine === 'margine') lista.sort(function (a, b) {
+    var ga = a.generale ? 2 : (margine(a) === null ? 1 : 0), gb = b.generale ? 2 : (margine(b) === null ? 1 : 0);
+    if (ga !== gb) return ga - gb;
+    if (!ga) return (margine(b) - margine(a)) || (b.guadagno - a.guadagno);
+    return a.luogo.toUpperCase() < b.luogo.toUpperCase() ? -1 : 1;
+  });
+  var testa = pannelloCanoni() + pannelloConto() + barraOrdine();
+  if (!lista.length) return testa + '<div class="vuoto">' + (solo ? 'Nessun lavoro da fatturare: tutto fatto.' : 'Nessun lavoro corrisponde alla ricerca.') + '</div>';
+  return testa + lista.map(function (l) {
     var k = D.lavori.indexOf(l), id = 'l' + k, breve = [];
     if (l.ore) breve.push(ore(l.ore));
-    breve.push(plurale(l.persone.length, 'persona', 'persone'));
-    if (l.spese) breve.push('spese ' + eur(l.spese));
+    if (l.persone.length) breve.push(plurale(l.persone.length, 'persona', 'persone'));
     if (l.generale) breve.push('non si fattura');
-    else if (l.fatturato) breve.push('<span class="verde-t">fatturato' + (l.fatturatoIl ? ' il ' + esc(l.fatturatoIl.slice(0, 10)) : '') + '</span>');
+    else if (l.senzaCanone) breve.push('<span class="segnale">manca il canone</span>');
+    else breve.push('incasso ' + eur(l.incasso));
+    breve.push('costo ' + eur(l.totale));
+    if (!l.generale && l.fatturato) breve.push('<span class="verde-t">fatturato' + (l.fatturatoIl ? ' il ' + esc(l.fatturatoIl.slice(0, 10)) : '') + '</span>');
+    if (l.arretrati && l.arretrati.length) breve.push('<span class="segnale">' + testoArretrati(l) + '</span>');
     if (l.daPrezzare) breve.push('<span class="segnale">' + l.daPrezzare + ' da prezzare</span>');
+    /* la barra: quanta parte dell'incasso se ne va in costi (rossa se piu' di tutto) */
+    var parte = l.incasso > 0 ? l.totale / l.incasso : (l.totale ? 1 : 0);
+    var barra = l.generale || l.senzaCanone ? '<span></span>' :
+      '<span class="barra-sfondo" aria-hidden="true" title="I costi sono il ' + Math.round(parte * 100) + '% dell\'incasso">' +
+      '<span class="barra-piena' + (parte > 1 ? ' oltre' : '') + '" style="width:' + Math.max(3, Math.min(100, Math.round(parte * 100))) + '%"></span></span>';
+    var mg = margine(l);
+    var destra = l.generale ? '<span class="rosso-t">− ' + eur(l.totale) + '</span>'
+               : l.senzaCanone ? '<span class="nota">—</span>'
+               : '<span' + (l.guadagno < 0 ? ' class="rosso-t"' : '') + '>' + eur(l.guadagno) + '</span>' +
+                 (mg === null ? '' : '<span class="perc' + (mg < 0 ? ' rosso-t' : '') + '" title="Margine">' + percento(mg) + '</span>');
     return '<div class="riga lavoro' + (STATO.aperti[id] ? ' aperta' : '') + '" id="' + id + '">' +
       (l.generale ? '<div></div>' :
        '<div class="spunta"><input type="checkbox" id="f' + k + '"' + (l.fatturato ? ' checked' : '') +
        ' onchange="fattura(' + k + ', this.checked)" aria-label="Fatturato: ' + esc(l.luogo) + '">' +
        '<label for="f' + k + '" title="Fatturato">' + SVG_SPUNTA + '</label></div>') +
-      testaRiga(id, '<span class="nome">' + esc(l.luogo) + '</span><br><span class="breve">' + breve.join(', ') + '</span>',
-                '<span class="barra-sfondo" aria-hidden="true"><span class="barra-piena" style="width:' +
-                Math.max(3, Math.round(l.totale / massimo * 100)) + '%"></span></span>', eur(l.totale)) +
-      '<div class="aperto-qui">' + dettaglioLavoro(l) + '</div></div>';
+      testaRiga(id, '<span class="nome">' + esc(l.luogo) + '</span><br><span class="breve">' + breve.join(', ') + '</span>', barra, destra) +
+      '<div class="aperto-qui">' + dettaglioLavoro(l, k) + '</div></div>';
   }).join('');
 }
 
-function dettaglioLavoro(l) {
-  var h = '<div class="blocco"><h3>Chi ci ha lavorato</h3><table><tr><th>Dipendente</th><th class="n">Ore</th><th class="n">Compenso</th></tr>';
+function dettaglioLavoro(l, k) {
+  var h = '';
+  if (!l.generale) {
+    h += '<div class="blocco"><h3>Incasso di ' + esc(D.mese) + ', IVA esclusa</h3>' +
+      '<div class="modulo"><label>Canone al mese (€)<input class="cas" id="lc' + k + '" type="number" inputmode="decimal" step="0.01" min="0" value="' +
+      (l.canone === null ? '' : l.canone) + '"></label>' +
+      '<div><button class="bott" onclick="salvaCanone(' + k + ', this)">Salva il canone</button></div></div>' +
+      '<p class="nota">' + (l.canone !== null && l.canoneDal && l.canoneDal !== D.mese ? 'In vigore da ' + esc(l.canoneDal) + '. ' : '') +
+      'Se lo cambi vale da ' + esc(D.mese) + ' in poi: i mesi prima restano com\'erano. 0 se il cliente non paga.</p>';
+    if (l.extra.length) {
+      h += '<table><tr><th>Extra di ' + esc(D.mese) + '</th><th class="n">Importo</th><th></th></tr>' +
+        l.extra.map(function (x) {
+          return '<tr><td>' + esc(x.descrizione) + '</td><td class="n">' + eur(x.importo) + '</td>' +
+                 '<td class="n"><button class="ripristina" onclick="togliConto(\'' + esc(x.id) + '\', this)">Togli</button></td></tr>';
+        }).join('') + '</table>';
+    }
+    h += '<div class="modulo"><label>Extra del mese<input class="cas" id="le' + k + '" placeholder="Es. Smaltimento, trappole"></label>' +
+      '<label>Importo (€)<input class="cas" id="li' + k + '" type="number" inputmode="decimal" step="0.01"></label>' +
+      '<div><button class="bott" onclick="aggiungiExtra(' + k + ', this)">Aggiungi l\'extra</button></div></div>' +
+      '<table class="conto-t"><tr><td>Incasso</td><td class="n">' + eur(l.incasso) + '</td></tr>' +
+      '<tr><td>Dipendenti e spese</td><td class="n">− ' + eur(l.totale) + '</td></tr>' +
+      '<tr class="totale"><td>Guadagno</td><td class="n' + (l.guadagno < 0 ? ' rosso-t' : '') + '">' + eur(l.guadagno) + '</td></tr>' +
+      (margine(l) === null ? '' : '<tr class="sotto"><td>margine ' + percento(margine(l)) + ' dell\'incasso</td><td></td></tr>') + '</table></div>';
+  }
+  if (!l.persone.length) return h + '<div class="blocco"><p class="nota" style="margin:0">Nessuno ci ha lavorato in ' + esc(D.mese) + '.</p></div>';
+  h += '<div class="blocco"><h3>Chi ci ha lavorato</h3><table><tr><th>Dipendente</th><th class="n">Ore</th><th class="n">Compenso</th></tr>';
   l.persone.forEach(function (p) {
     h += '<tr><td>' + esc(p.nome) + '</td><td class="n">' + (p.ore ? num(p.ore) : '') + '</td><td class="n">' + eur(p.importo) + '</td></tr>';
   });
@@ -1326,19 +1452,311 @@ function dettaglioLavoro(l) {
   return h + '</table></div>';
 }
 
-/* la spunta cambia subito; se il foglio non risponde torna com'era */
-function fattura(k, valore) {
+/* il conto di tutto il mese, in cima alla scheda */
+function pannelloConto() {
+  var c = D.conto;
+  if (!c || STATO.canoni) return '';
+  var segno = function (v) { return '<span' + (v < 0 ? ' class="rosso-t"' : '') + '>' + eur(v) + '</span>'; };
+  var h = '<div class="ced conto"><div class="ced-testa"><h3>Il conto di ' + esc(D.mese) + '</h3>' +
+          '<button class="bott" onclick="apriCanoni()">Scrivi i canoni</button></div>' +
+          '<table class="conto-t"><tr><td>Incassi, IVA esclusa</td><td class="n">' + eur(c.incassi) + '</td></tr>';
+  if (c.extra) h += '<tr class="sotto"><td>canoni ' + eur(c.canoni) + ' ed extra ' + eur(c.extra) + '</td><td></td></tr>';
+  h += '<tr><td>Dipendenti</td><td class="n">− ' + eur(c.costoDipendenti) + '</td></tr>';
+  var fuori = Math.round((c.costoDipendenti - c.costoLavori) * 100) / 100;
+  if (fuori > 0.005) h += '<tr class="sotto"><td>di cui ' + eur(fuori) + ' non legati a un lavoro (voci riservate)</td><td></td></tr>';
+  c.altriCosti.forEach(function (x) {
+    h += '<tr><td>' + esc(x.descrizione) + ' <button class="ripristina" onclick="togliConto(\'' + esc(x.id) + '\', this)">Togli</button></td>' +
+         '<td class="n">− ' + eur(x.importo) + '</td></tr>';
+  });
+  h += '<tr class="totale"><td>Guadagno</td><td class="n">' + segno(c.guadagno) + '</td></tr></table>';
+  if (c.senzaCanone) {
+    h += '<p class="segnale">' + (c.senzaCanone === 1 ? 'Un lavoro non ha' : c.senzaCanone + ' lavori non hanno') +
+         ' il canone: il conto non è completo. Scrivili con «Scrivi i canoni».</p>';
+  }
+  h += '<div class="modulo"><label>Altro costo del mese<input class="cas" id="cc-d" placeholder="Es. F24 contributi, consulente"></label>' +
+       '<label>Importo (€)<input class="cas" id="cc-i" type="number" inputmode="decimal" step="0.01"></label>' +
+       '<div><button class="bott" onclick="aggiungiCosto(this)">Aggiungi il costo</button></div></div></div>';
+  return h;
+}
+
+/* "Ordina per nome / margine": per vedere a colpo d'occhio dove si guadagna di piu' e di meno */
+function barraOrdine() {
+  var conIncasso = D.lavori.filter(function (l) { return margine(l) !== null; });
+  if (!conIncasso.length) return '';          /* senza canoni il margine non si sa */
+  var h = '<div class="ordina" role="group" aria-label="Ordine dei lavori"><span class="nota">Ordina per</span>' +
+    [['nome', 'nome'], ['margine', 'margine']].map(function (o) {
+      return '<button class="pill" aria-pressed="' + ((STATO.ordine || 'nome') === o[0]) + '" onclick="ordinaLavori(\'' + o[0] + '\')">' + o[1] + '</button>';
+    }).join('') + '</div>';
+  if (STATO.ordine !== 'margine') return h;
+  var incasso = 0, guadagno = 0;
+  conIncasso.forEach(function (l) { incasso += l.incasso; guadagno += l.guadagno; });
+  var ord = conIncasso.slice().sort(function (a, b) { return margine(b) - margine(a); });
+  var alto = ord[0], basso = ord[ord.length - 1];
+  h += '<p class="spiega-mod">Dal margine più alto al più basso. Il margine è la parte dell\'incasso che resta dopo i dipendenti ' +
+       'e le spese del lavoro, prima dei costi generali. In media è il <b>' + percento(guadagno / incasso) + '</b>' +
+       (ord.length > 1 ? '; il più alto è ' + esc(alto.luogo) + ' (' + percento(margine(alto)) + '), il più basso ' +
+                         esc(basso.luogo) + ' (' + percento(margine(basso)) + ')' : '') + '.</p>';
+  return h;
+}
+
+function ordinaLavori(o) { STATO.ordine = o; disegnaElenco(); }
+
+/* ---- salvataggi: rispondono con i numeri del mese gia' rifatti ---- */
+
+function inViaggio(bottone, testo) {
+  if (!bottone) return function () {};
+  var prima = bottone.textContent;
+  bottone.disabled = true; bottone.textContent = testo;
+  return function () { bottone.disabled = false; bottone.textContent = prima; };
+}
+
+function dopoConto(r, messaggio) {
+  nuoviNumeri(r.mese);
+  disegnaFrase(); disegnaElenco();
+  if (messaggio) dici(messaggio);
+}
+
+function salvaCanone(k, b) {
+  var l = D.lavori[k], v = document.getElementById('lc' + k).value.trim();
+  var fine = inViaggio(b, 'Salvo…');
+  api('master.canoni', { k: CHIAVE, mese: D.mese, canoni: [{ lavoro: l.luogo, canone: v }] }).then(function (r) {
+    dopoConto(r, r.scritti ? 'Canone di ' + l.luogo + ' salvato, da ' + D.mese + ' in poi.' : 'Il canone era già questo.');
+  }).catch(function (e) { fine(); dici('Non ho salvato il canone: ' + e.message, true); });
+}
+
+function aggiungiExtra(k, b) {
   var l = D.lavori[k];
+  var d = document.getElementById('le' + k).value.trim(), i = document.getElementById('li' + k).value;
+  if (!d || !numero(i)) return dici('Scrivi cos\'è l\'extra e l\'importo.', true);
+  var fine = inViaggio(b, 'Aggiungo…');
+  api('master.conto', { k: CHIAVE, mese: D.mese, op: 'aggiungi', tipo: 'extra', lavoro: l.luogo, descrizione: d, importo: i })
+    .then(function (r) { dopoConto(r, 'Extra aggiunto a ' + l.luogo + '.'); })
+    .catch(function (e) { fine(); dici('Non ho aggiunto l\'extra: ' + e.message, true); });
+}
+
+function aggiungiCosto(b) {
+  var d = document.getElementById('cc-d').value.trim(), i = document.getElementById('cc-i').value;
+  if (!d || !numero(i)) return dici('Scrivi cos\'è il costo e l\'importo.', true);
+  var fine = inViaggio(b, 'Aggiungo…');
+  api('master.conto', { k: CHIAVE, mese: D.mese, op: 'aggiungi', tipo: 'costo', descrizione: d, importo: i })
+    .then(function (r) { dopoConto(r, 'Costo aggiunto al conto di ' + D.mese + '.'); })
+    .catch(function (e) { fine(); dici('Non ho aggiunto il costo: ' + e.message, true); });
+}
+
+function togliConto(id, b) {
+  var fine = inViaggio(b, 'Tolgo…');
+  api('master.conto', { k: CHIAVE, mese: D.mese, op: 'togli', id: id })
+    .then(function (r) { dopoConto(r, 'Tolto.'); })
+    .catch(function (e) { fine(); dici('Non sono riuscito a toglierlo: ' + e.message, true); });
+}
+
+/* ---- tutti i canoni in una tabella: per scriverli la prima volta ---- */
+
+function apriCanoni() {
+  STATO.canoni = { stato: 'carico', righe: [] };
+  disegnaElenco();
+  api('master.listaCanoni', { k: CHIAVE, mese: D.mese }).then(function (d) {
+    if (!STATO.canoni) return;
+    STATO.canoni = { stato: 'pronto', righe: d.lavori.map(function (x) {
+      return { lavoro: x.lavoro, canone: x.canone, dal: x.dal, valore: x.canone === null ? '' : String(x.canone) };
+    }) };
+    if (STATO.scheda === 'lavori') disegnaElenco();
+  }).catch(function (e) {
+    if (!STATO.canoni) return;
+    STATO.canoni = { stato: 'errore', errore: e.message, righe: [] };
+    if (STATO.scheda === 'lavori') disegnaElenco();
+  });
+}
+
+function canoneCambiato(r) {
+  if (r.valore === '') return r.canone !== null && r.dal === D.mese;     /* svuotata: si toglie quello di questo mese */
+  return r.canone === null || Math.abs(numero(r.valore) - r.canone) > 0.005;
+}
+
+function pannelloCanoni() {
+  var c = STATO.canoni;
+  if (!c) return '';
+  var h = '<div class="ced"><div class="ced-testa"><h3>Canoni dei lavori, da ' + esc(D.mese) + '</h3>' +
+          '<button class="bott" onclick="chiudiCanoni()">Chiudi</button></div>';
+  if (c.stato === 'carico') return h + '<p class="attesa">Carico i lavori…</p></div>';
+  if (c.stato === 'errore') return h + '<div class="errore">' + esc(c.errore) + '</div></div>';
+  h += '<p class="nota">Quanto paga il cliente ogni mese, IVA esclusa. Vale da ' + esc(D.mese) +
+       ' in poi: i mesi prima non cambiano. Lascia vuoto chi non ha un canone fisso (lo segni con gli extra); 0 se il cliente non paga.</p>' +
+       '<div class="tabella-scorre"><table><tr><th>Lavoro</th><th class="n">Canone al mese (€)</th></tr>';
+  c.righe.forEach(function (r, i) {
+    if (!corrisponde(r.lavoro)) return;
+    h += '<tr' + (canoneCambiato(r) ? ' class="cambiata"' : '') + ' id="cn' + i + '"><td>' + esc(r.lavoro) +
+         (r.canone !== null && r.dal !== D.mese ? '<br><span class="nota">in vigore da ' + esc(r.dal) + '</span>' : '') + '</td>' +
+         '<td class="n"><input class="cas" type="number" inputmode="decimal" step="0.01" min="0" value="' + esc(r.valore) + '" ' +
+         'oninput="scriviCanoneQui(' + i + ', this.value)" aria-label="Canone ' + esc(r.lavoro) + '"></td></tr>';
+  });
+  var n = c.righe.filter(canoneCambiato).length;
+  h += '</table></div><div class="ced-azioni"><button class="bott primo" id="salva-canoni" onclick="salvaCanoni(this)"' + (n ? '' : ' disabled') + '>' +
+       (n ? 'Salva ' + plurale(n, 'canone', 'canoni') : 'Nessun canone cambiato') + '</button>' +
+       '<span class="nota">La ricerca in alto filtra i lavori.</span></div></div>';
+  return h;
+}
+
+function scriviCanoneQui(i, v) {
+  var r = STATO.canoni.righe[i];
+  r.valore = v.trim();
+  var tr = document.getElementById('cn' + i);
+  if (tr) tr.classList.toggle('cambiata', canoneCambiato(r));
+  var n = STATO.canoni.righe.filter(canoneCambiato).length, b = document.getElementById('salva-canoni');
+  if (b) { b.disabled = !n; b.textContent = n ? 'Salva ' + plurale(n, 'canone', 'canoni') : 'Nessun canone cambiato'; }
+}
+
+function chiudiCanoni() {
+  var n = STATO.canoni && STATO.canoni.righe ? STATO.canoni.righe.filter(canoneCambiato).length : 0;
+  if (n && !confirm('Hai ' + plurale(n, 'canone', 'canoni') + ' non ' + (n === 1 ? 'salvato' : 'salvati') + '. Chiudo lo stesso?')) return;
+  STATO.canoni = null; disegnaElenco();
+}
+
+function salvaCanoni(b) {
+  var cambiati = STATO.canoni.righe.filter(canoneCambiato).map(function (r) { return { lavoro: r.lavoro, canone: r.valore }; });
+  if (!cambiati.length) return;
+  var fine = inViaggio(b, 'Salvo…');
+  api('master.canoni', { k: CHIAVE, mese: D.mese, canoni: cambiati }).then(function (r) {
+    STATO.canoni = null;
+    dopoConto(r, 'Salvati ' + plurale(r.scritti, 'canone', 'canoni') + ', da ' + D.mese + ' in poi.');
+  }).catch(function (e) { fine(); dici('Non ho salvato i canoni: ' + e.message, true); });
+}
+
+/* ---- la spunta "fatturato" ----
+   Una sola per lavoro e mese (foglio Fatture): si mette dalla scheda Lavori
+   o dalla scheda di un dipendente, e compare spuntata in tutte e due.
+   Prima di metterla, se c'e' qualcosa da ricordare (altri dipendenti sullo
+   stesso lavoro, spese, extra, mesi prima non fatturati) si apre un avviso:
+   da li' si possono segnare insieme anche i mesi prima (fattura di due mesi). */
+
+function fattura(k, valore, pk) {
+  var l = D.lavori[k];
+  if (!l) return;
+  if (!valore) return salvaFattura(k, false, []);
+  var h = avvisoFattura(l, pk === undefined ? '' : D.persone[pk].nome);
+  if (!h) return salvaFattura(k, true, []);
+  var dlg = document.getElementById('avviso');
+  if (!dlg.showModal) {                         /* telefoni molto vecchi */
+    if (confirm(l.luogo + ': ci sono altri lavori, spese o mesi prima da controllare. Segno fatturato?')) salvaFattura(k, true, []);
+    else dopoSpunta();
+    return;
+  }
+  document.getElementById('avviso-dentro').innerHTML = h;
+  dlg.dataset.k = k;
+  dlg.returnValue = '';
+  dlg.showModal();
+  document.getElementById('avviso-si').focus();
+}
+
+/* quello che c'e' da ricordare prima di fatturare; vuoto se non c'e' niente */
+function avvisoFattura(l, chi) {
+  var nomi = {};
+  l.righe.forEach(function (r) { nomi[r.nome] = true; });
+  var tanti = Object.keys(nomi).length > 1;
+  /* dalla scheda di un dipendente: le voci degli altri; dalla scheda Lavori: tutte, se ci lavora piu' di uno.
+     Le spese sempre: possono andare in fattura. */
+  var voci = l.righe.filter(function (r) { return r.tipo === 'Spesa' || (chi ? r.nome !== chi : tanti); });
+  var prima = l.arretrati || [];
+  if (!voci.length && !l.extra.length && !prima.length) return '';
+
+  var h = '<h2 id="avviso-titolo">' + esc(l.luogo) + '</h2>' +
+          '<p class="sottotitolo">Prima di segnare fatturato ' + esc(D.mese) + ', controlla che nella fattura ci sia tutto.</p>';
+  if (l.canone || l.extra.length) {
+    var pezzi = [];
+    if (l.canone) pezzi.push('canone ' + eur(l.canone));
+    l.extra.forEach(function (x) { pezzi.push(esc(x.descrizione) + ' ' + eur(x.importo)); });
+    h += '<div class="in-fattura">Da incassare per ' + esc(D.mese) + ': ' + pezzi.join(', ') +
+         (pezzi.length > 1 ? ', in tutto <b class="num">' + eur(l.incasso) + '</b>' : '') + ', IVA esclusa.</div>';
+  }
+  if (voci.length) {
+    h += '<h3>' + (chi ? 'Su questo lavoro, a ' + esc(D.mese) + ', c\'è anche' : 'Chi ci ha lavorato a ' + esc(D.mese)) + '</h3><ul>' +
+      voci.map(function (r) {
+        var quanto = r.tipo === 'Spesa' ? 'spesa ' + eur(r.importo) : (r.tipo === 'Ore' ? ore(r.q) : (r.tipo === 'Fisso' ? 'fisso' : ''));
+        return '<li><span><b>' + esc(r.nome) + '</b><br>' + esc(r.voce) +
+               (r.nota ? '<br><span class="nota">' + esc(r.nota) + '</span>' : '') + '</span><span class="num nota">' + quanto + '</span></li>';
+      }).join('') + '</ul>';
+  }
+  if (prima.length) {
+    h += '<h3>' + (prima.length === 1 ? 'Il mese prima non è fatturato' : 'Mesi prima non fatturati') + '</h3><ul>' +
+      prima.map(function (a) {
+        var cosa = [];
+        if (a.incasso) cosa.push('da incassare ' + eur(a.incasso));
+        if (a.costo) cosa.push('costi ' + eur(a.costo));
+        return '<li><label class="mese-prima"><input type="checkbox" name="prima" value="' + esc(a.mese) + '">' +
+               '<span><b>' + esc(a.mese) + '</b><br><span class="nota">' + cosa.join(', ') + '</span></span></label></li>';
+      }).join('') + '</ul><p class="nota">Spunta i mesi che metti in questa stessa fattura (per esempio una fattura di due mesi).</p>';
+  }
+  return h;
+}
+
+/* l'avviso si chiude: con "Segna fatturato" si salva, altrimenti la casella torna vuota */
+function chiusoAvviso() {
+  var dlg = document.getElementById('avviso'), k = Number(dlg.dataset.k);
+  if (dlg.returnValue === 'si') {
+    var mesi = [].slice.call(dlg.querySelectorAll('input[name="prima"]:checked')).map(function (x) { return x.value; });
+    salvaFattura(k, true, mesi);
+  } else dopoSpunta();
+}
+
+/* la spunta cambia subito; se il foglio non risponde torna com'era */
+function salvaFattura(k, valore, mesi) {
+  var l = D.lavori[k];
+  var prima = { f: l.fatturato, il: l.fatturatoIl, a: l.arretrati };
   l.fatturato = valore;
   l.fatturatoIl = valore ? new Date().toLocaleDateString('it-IT') : '';
-  D.totali.daFatturare += valore ? -1 : 1;
-  disegnaFrase(); disegnaElenco();
-  api('master.fatturato', { k: CHIAVE, mese: D.mese, luogo: l.luogo, fatturato: valore }).catch(function (e) {
-    l.fatturato = !valore;
-    D.totali.daFatturare += valore ? 1 : -1;
-    disegnaFrase(); disegnaElenco();
+  l.arretrati = (l.arretrati || []).filter(function (a) { return mesi.indexOf(a.mese) < 0; });
+  dopoSpunta();
+  api('master.fatturato', { k: CHIAVE, mese: D.mese, luogo: l.luogo, fatturato: valore, altri: mesi }).then(function () {
+    if (mesi.length) dici(l.luogo + ': segnato fatturato anche ' + mesi.join(' e ') + '.');
+  }).catch(function (e) {
+    l.fatturato = prima.f; l.fatturatoIl = prima.il; l.arretrati = prima.a;
+    dopoSpunta();
     dici('Non sono riuscito a salvare la spunta: ' + e.message, true);
   });
+}
+
+/* ridisegna le spunte dove si vedono, senza toccare le caselle dei dipendenti */
+function dopoSpunta() {
+  D.totali.daFatturare = D.lavori.filter(function (l) { return !l.generale && !l.fatturato; }).length;
+  disegnaFrase();
+  if (STATO.scheda === 'lavori') return disegnaElenco();
+  D.persone.forEach(function (p, i) {
+    var box = document.getElementById('p' + i + '-f');
+    if (box) box.innerHTML = bloccoFatture(i, p);
+  });
+}
+
+/* nella scheda di un dipendente: i lavori su cui ha lavorato nel mese, con la spunta */
+function bloccoFatture(pk, p) {
+  var visti = {}, ks = [];
+  p.righe.forEach(function (r) {
+    if (r.riservata || visti[r.luogo]) return;
+    visti[r.luogo] = true;
+    for (var k = 0; k < D.lavori.length; k++) {
+      if (D.lavori[k].luogo === r.luogo && !D.lavori[k].generale) { ks.push(k); break; }
+    }
+  });
+  if (!ks.length) return '';
+  return '<h3>I suoi lavori: fatturati?</h3>' + ks.map(function (k) {
+    var l = D.lavori[k], id = 'pf' + pk + '-' + k;
+    var info = [l.fatturato ? '<span class="verde-t">fatturato' + (l.fatturatoIl ? ' il ' + esc(l.fatturatoIl.slice(0, 10)) : '') + '</span>' : 'da fatturare'];
+    var altri = l.persone.filter(function (x) { return x.nome !== p.nome; }).map(function (x) { return esc(x.nome); });
+    if (altri.length) info.push('ci lavora anche ' + altri.join(', '));
+    if (l.arretrati && l.arretrati.length) info.push('<span class="segnale">' + testoArretrati(l) + '</span>');
+    return '<div class="fatt-riga"><div class="spunta"><input type="checkbox" id="' + id + '"' + (l.fatturato ? ' checked' : '') +
+      ' onchange="fattura(' + k + ', this.checked, ' + pk + ')" aria-label="Fatturato: ' + esc(l.luogo) + '">' +
+      '<label for="' + id + '" title="Fatturato">' + SVG_SPUNTA + '</label></div>' +
+      '<div><span class="fatt-nome">' + esc(l.luogo) + '</span><br><span class="breve">' + info.join(', ') + '</span></div></div>';
+  }).join('');
+}
+
+/* "ottobre non fatturato", "ottobre e settembre non fatturati", "3 mesi prima non fatturati" */
+function testoArretrati(l) {
+  var anno = D.mese.split(' ')[1];
+  var a = l.arretrati.map(function (x) { var p = x.mese.split(' '); return p[1] === anno ? p[0] : x.mese; });
+  if (a.length === 1) return a[0] + ' non fatturato';
+  if (a.length === 2) return a[0] + ' e ' + a[1] + ' non fatturati';
+  return a.length + ' mesi prima non fatturati';
 }
 
 
